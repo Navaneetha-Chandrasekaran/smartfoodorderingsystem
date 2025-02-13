@@ -2,9 +2,12 @@
 
 import 'package:flutter/material.dart';
 
-import 'ui/screens/login_screen.dart';
+import 'ui/screens/onboard_screen.dart';
+
+// import 'ui/screens/login_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -15,7 +18,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: LoginScreen(),
+      home: OnboardScreen(),
     );
   }
 }
