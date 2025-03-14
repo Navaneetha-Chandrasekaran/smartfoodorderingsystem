@@ -15,7 +15,34 @@ class Titles extends StatelessWidget {
 
     return Text(title,
         style: GoogleFonts.roboto(
-            fontSize: screenWidth * 0.07, fontWeight: FontWeight.bold));
+            fontSize: screenWidth * 0.06, fontWeight: FontWeight.w600));
+  }
+}
+
+class SubTitles extends StatelessWidget {
+  final String title;
+  final Color? color;
+  final double? fontSize; // ✅ Allow custom font size
+
+  const SubTitles({
+    super.key,
+    this.color,
+    required this.title,
+    this.fontSize, // ✅ Optional font size
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double defaultSize = MediaQuery.of(context).size.width * 0.05; // ✅ Responsive default size
+
+    return Text(
+      title,
+      style: GoogleFonts.roboto(
+        fontSize: fontSize ?? defaultSize, // ✅ Use custom or default size
+        fontWeight: FontWeight.w500,
+        color: color
+      ),
+    );
   }
 }
 
@@ -80,6 +107,68 @@ class rowText extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+
+class FoodName extends StatelessWidget {
+  const FoodName({
+    super.key,
+    required this.foodName
+  });
+  final String foodName;
+
+  @override
+  Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    return Text(
+      foodName,
+      style: GoogleFonts.roboto(
+        fontSize: screenWidth * 0.04,
+        fontWeight: FontWeight.w500
+      ),
+    );
+  }
+}
+
+class FoodPrice extends StatelessWidget {
+  const FoodPrice({
+    super.key,
+    required this.foodPrice
+  });
+  final String foodPrice;
+
+  @override
+  Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    return Text(
+      foodPrice,
+      style: GoogleFonts.roboto(
+        fontSize: screenWidth * 0.035,
+        fontWeight: FontWeight.w600
+      ),
+    );
+  }
+}
+
+class FoodDescription extends StatelessWidget {
+  const FoodDescription({
+    super.key,
+    required this.description
+  });
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    return Text(
+      description,
+      style: GoogleFonts.roboto(
+        fontSize: screenWidth * 0.03,
+        fontWeight: FontWeight.w500
+      ),
     );
   }
 }

@@ -1,14 +1,23 @@
-// ignore_for_file: prefer_const_constructors
-
+import 'package:bitetimenew/ui/screens/isthara/isthara.dart';
+import 'package:bitetimenew/ui/sheets/navbar.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:bitetimenew/theme/theme_provider.dart';
+import 'package:bitetimenew/ui/sheets/food_menu.dart';
 
 import 'ui/screens/onboard_screen.dart';
 
-// import 'ui/screens/login_screen.dart';
-
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => ThemeProvider()),
+        ChangeNotifierProvider(create: (context) => FoodMenu()), // ✅ Ensuring FoodMenu is available
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -18,7 +27,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: OnboardScreen(),
+      home: CustomNavBar(),
+      theme: Provider.of<ThemeProvider>(context).themeData,
     );
   }
 }
