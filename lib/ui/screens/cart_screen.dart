@@ -1,81 +1,219 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/cart_tile.dart';
-import '../../models/constants.dart';
-import '../../models/titles.dart';
-import '../sheets/food_menu.dart';
-import '../sheets/navigator.dart';
+import 'package:bitetimenew/animations/loading.dart';
+import 'package:bitetimenew/animations/order.dart';
+import 'package:bitetimenew/models/cart_tile.dart';
+import 'package:bitetimenew/models/constants.dart';
+import 'package:bitetimenew/models/payment_selector.dart';
+import 'package:bitetimenew/models/time_selector.dart';
+import 'package:bitetimenew/models/titles.dart';
+import 'package:bitetimenew/ui/sheets/food_menu.dart';
+import 'package:bitetimenew/ui/sheets/navigator.dart';
+import 'package:bitetimenew/ui/sheets/navbar.dart';
+import 'package:bitetimenew/models/buttons.dart';
+import 'package:bitetimenew/ui/screens/timeline_screen.dart';
+import '../sheets/shared_prefs.dart';
 
-class CartScreen extends StatelessWidget {
+class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
+
+  @override
+  State<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends State<CartScreen> {
+  String _selectedPayment = "GPay";
+  bool _isOrderProcessing = false;
+  bool _isOrderPlaced = false;
+  bool _showTimeError = false;
+  TimeOfDay? _selectedTime; // ✅ Common time selector for the whole cart
+
+  @override
+  void initState() {
+    super.initState();
+    loadPaymentPreference().then((value) {
+      if (mounted) {
+        setState(() => _selectedPayment = value);
+      }
+    });
+  }
+
+  void _placeOrder() {
+    if (_selectedTime == null) {
+      setState(() => _showTimeError = true);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _showTimeError = false);
+      });
+      return;
+    }
+
+    final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+    setState(() => _isOrderProcessing = true);
+
+    // ✅ Show loading animation for 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+
+      setState(() {
+        _isOrderProcessing = false;
+        _isOrderPlaced = true;
+      });
+
+      // ✅ Show order placed animation for 3 seconds
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!mounted) return;
+
+        setState(() => _isOrderPlaced = false);
+        foodMenu.clearCart();
+
+        // ✅ Navigate to Timeline Screen after all animations
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const TimelineScreen()),
+        );
+      });
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
+    final userCart = Provider.of<FoodMenu>(context).cart;
 
-    return Consumer<FoodMenu>(
-      builder: (context, foodMenu, child) {
-        final userCart = foodMenu.cart;
-
-        return Scaffold(
-          appBar: AppBar(
-            title: Titles(title: 'Cart'),
-            centerTitle: true,
-            elevation: 0,
-            backgroundColor: secondaryColor,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios, color: Colors.white),
-              onPressed: () {
-                Navigation.goBack(context);
-              },
+    return Scaffold(
+      appBar: AppBar(
+        title: Titles(title: 'Cart'),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: secondaryColor,
+        leading: InkWell(
+          onTap: () => Navigation.goBack(context),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Container(
+              width: screenWidth * 0.1,
+              height: screenWidth * 0.1,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Icon(
+                  Icons.arrow_back_ios,
+                  color: Colors.white,
+                  size: screenWidth * 0.05,
+                ),
+              ),
             ),
           ),
-          body: userCart.isEmpty
-              ? _buildEmptyCartUI(screenWidth)
-              : Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: userCart.length,
-                        itemBuilder: (context, index) {
-                          return CartTile(cartItem: userCart[index]);
-                        },
-                      ),
-                    ),
-                    _buildCheckoutButton(context),
-                    SizedBox(height: screenWidth * 0.1)
-                  ],
-                ),
-        );
-      },
-    );
-  }
-
-  Widget _buildEmptyCartUI(double screenWidth) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        ),
+      ),
+      body: Stack(
         children: [
-          Image.asset(
-            'assets/empty.png',
-            width: screenWidth * 0.5,
-          ),
-          SizedBox(height: 20),
-          Text("Your cart is empty!", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          SizedBox(height: 10),
-          Text("Looks like you haven't added anything yet.", style: TextStyle(color: Colors.grey[600])),
+          _isOrderProcessing
+              ?  LoadingAnimation()
+              : _isOrderPlaced
+                  ?  OrderPlacedAnimation()
+                  : userCart.isEmpty
+                      ? _buildEmptyCartUI(context)
+                      : SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              _buildCartItems(userCart),
+                              SizedBox(height: screenWidth * 0.05),
+
+                              // ✅ Common Time Selector
+                              TimeSelector(
+                                selectedTime: _selectedTime,
+                                onTimeSelected: (time) {
+                                  setState(() => _selectedTime = time);
+                                },
+                              ),
+
+                              SizedBox(height: screenWidth * 0.1),
+
+                              _buildPaymentSelector(),
+
+                              SizedBox(height: screenWidth * 0.1),
+
+                              // ✅ Order button
+                              OrderButton(
+                                onPressed: _isOrderProcessing ? null : _placeOrder,
+                              ),
+
+                              SizedBox(height: screenWidth * 0.1),
+                            ],
+                          ),
+                        ),
+
+          // ✅ Time Selection Error Popup
+          if (_showTimeError) _buildTimeErrorPopup(),
         ],
       ),
     );
   }
 
-  Widget _buildCheckoutButton(BuildContext context) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: EdgeInsets.symmetric(vertical: 14, horizontal: 50)),
-      onPressed: () {
-        print("Proceeding to checkout...");
+  /// ✅ Builds the cart items list with spacing
+  Widget _buildCartItems(List userCart) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: userCart.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        return CartTile(cartItem: userCart[index]);
       },
-      child: SubTitles(title: "Go to Checkout", color: Colors.white),
+    );
+  }
+
+  /// ✅ Builds the Payment Selector UI
+  Widget _buildPaymentSelector() {
+    return PaymentSelector(
+      selectedPayment: _selectedPayment,
+      onPaymentChanged: (newPayment) {
+        setState(() => _selectedPayment = newPayment);
+        savePaymentPreference(newPayment);
+      },
+    );
+  }
+
+  /// ✅ UI for Empty Cart
+  Widget _buildEmptyCartUI(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Image.asset('assets/empty.png', width: screenWidth * 0.5),
+          const SizedBox(height: 20),
+          const Text("Your cart is empty!", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          const Text("Looks like you haven't added anything yet.", style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 20),
+          button(label: 'Tap to Order!', destination: CustomNavBar()),
+        ],
+      ),
+    );
+  }
+
+  /// ✅ Time Selection Error Popup
+  Widget _buildTimeErrorPopup() {
+    return Positioned(
+      top: 50,
+      left: 20,
+      right: 20,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.redAccent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text("Please select a pickup time before ordering!", style: TextStyle(color: Colors.white)),
+        ),
+      ),
     );
   }
 }

@@ -7,12 +7,15 @@ import 'titles.dart';
 
 class CartButton extends StatelessWidget {
   final String name;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final Widget? destination;
 
   const CartButton({
     super.key,
     required this.name,
-    required this.onTap,
+    this.onTap, 
+    this.destination,
+    
   });
 
   @override
@@ -46,33 +49,65 @@ class button extends StatelessWidget {
   const button({
     super.key,
     required this.label,
-    required this.destination,
+    this.destination,
+    this.width,
+    this.height,
+    this.onPressed,
+    this.bg,
   });
 
   final String label;
-  final Widget destination;
+  final Widget? destination;
+  final double? width;
+  final double? height;
+  final VoidCallback? onPressed; // onPressed callback for button
+  final Color? bg;
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
     double screenHeight = MediaQuery.of(context).size.height;
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-            context, MaterialPageRoute(builder: (context) => destination));
-      },
-      child: Container(
-        width: screenWidth * 0.75,
-        height: screenHeight * 0.06,
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: BoxDecoration(
-            gradient: primaryColor, borderRadius: BorderRadius.circular(50)),
-        child: Center(
-          child: Text(label,
-              style: GoogleFonts.roboto(
-                  fontSize: screenWidth * 0.06, fontWeight: FontWeight.bold)),
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(50),
+        onTap: onPressed, // Trigger the onPressed callback
+        child: Container(
+          width: width ?? screenWidth * 0.75,
+          height: height ?? screenHeight * 0.06,
+          decoration: BoxDecoration(
+            color: bg ?? Colors.transparent, // Background color if provided
+            gradient: bg == null ? const LinearGradient(colors: [Colors.blue, Colors.green]) : null, // Default gradient if no bg
+            borderRadius: BorderRadius.circular(50),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
         ),
       ),
+    );
+  }
+}
+
+class OrderButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+
+  const OrderButton({super.key, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green,
+        padding: EdgeInsets.symmetric(vertical: 14, horizontal: 50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+      ),
+      child: Description(description: "Place Order", color: Colors.white),
     );
   }
 }

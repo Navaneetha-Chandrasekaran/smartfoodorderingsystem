@@ -11,9 +11,9 @@ final List<Food> _menu = [
     image: 'assets/food/cb.png', 
     price: 80, 
     category: FoodCategory.lunch, 
+    availableQuantity: 100,
     availableAddons: [
       Addon(name: 'Raita'),
-      Addon(name: 'Extra Chicken'),
       Addon(name: 'Egg')
     ],
     isVeg: false,
@@ -24,6 +24,7 @@ final List<Food> _menu = [
     image: 'assets/food/cfc.png', 
     price: 70, 
     category: FoodCategory.lunch, 
+    availableQuantity: 100,
     availableAddons: [
       // Addon
       Addon(name: 'Medium Spice', spiceLevel: SpiceLevel.medium), // 🌶 Medium Spice
@@ -37,7 +38,8 @@ final List<Food> _menu = [
     description: 'Fragrant rice and tender chicken slow-cooked with aromatic spices, served with raita.', 
     image: 'assets/food/cb.png', 
     price: 80, 
-    category: FoodCategory.lunch, 
+    category: FoodCategory.lunch,
+    availableQuantity: 100,
     availableAddons: [
       // Addon
     ],
@@ -49,6 +51,7 @@ final List<Food> _menu = [
     image: 'assets/food/cb.png', 
     price: 80, 
     category: FoodCategory.lunch, 
+    availableQuantity: 100,
     availableAddons: [
       // Addon
     ],
@@ -59,7 +62,8 @@ final List<Food> _menu = [
     description: 'Fragrant rice and tender chicken slow-cooked with aromatic spices, served with raita.', 
     image: 'assets/food/cb.png', 
     price: 80, 
-    category: FoodCategory.lunch, 
+    category: FoodCategory.lunch,
+    availableQuantity: 100,
     availableAddons: [
       // Addon
     ],
@@ -67,54 +71,38 @@ final List<Food> _menu = [
   ),
 ];
 
-  List<Food> get menu => _menu; // ✅ Get available food items
-  List<CartItem> get cart => _cart; // ✅ Get user cart
 
-  // ✅ User Cart
+  List<Food> get menu => _menu;
+  List<CartItem> get cart => _cart;
+
   final List<CartItem> _cart = [];
 
-  // ✅ Add food to cart (Now includes selectedAddons)
-void addToCart(Food food, List<Addon> selectedAddons) {
-  CartItem? cartItem = _cart.firstWhereOrNull((item) {
-    // Check if the food item & addons match
-    bool isSameFood = item.food == food;
-    bool isSameAddons = _areAddonsEqual(item.selectedAddons, selectedAddons);
+  // ✅ Add to Cart (Decreases Available Stock)
+  void addToCart(Food food, List<Addon> selectedAddons) {
+    if (food.availableQuantity > 0) { // ✅ Only add if in stock
+      food.availableQuantity--; // ✅ Reduce stock
 
-    return isSameFood && isSameAddons;
-  });
+      CartItem? cartItem = _cart.firstWhereOrNull((item) {
+        bool isSameFood = item.food == food;
+        bool isSameAddons = _areAddonsEqual(item.selectedAddons, selectedAddons);
+        return isSameFood && isSameAddons;
+      });
 
-  // ✅ If item already exists, increase its quantity:
-  if (cartItem != null) {
-    cartItem.quantity++;
-  } else {
-    // ✅ Add new item with selected addons
-    _cart.add(
-      CartItem(
-        food: food,
-        selectedAddons: selectedAddons,
-        quantity: 1,
-      ),
-    );
+      if (cartItem != null) {
+        cartItem.quantity++;
+      } else {
+        _cart.add(CartItem(food: food, selectedAddons: selectedAddons, quantity: 1));
+      }
+
+      notifyListeners();
+    }
   }
-  
-  notifyListeners(); // ✅ Update UI
-}
 
-// ✅ Function to update quantity (Optional, for better reusability)
-void updateQuantity(CartItem cartItem, int newQuantity) {
-  if (newQuantity > 0) {
-    cartItem.quantity = newQuantity;
-  } else {
-    _cart.remove(cartItem);
-  }
-  
-  notifyListeners();
-}
-
-  // ✅ Remove item from cart
+  // ✅ Remove from Cart (Restores Stock)
   void removeFromCart(CartItem cartItem) {
     int cartIndex = _cart.indexOf(cartItem);
     if (cartIndex != -1) {
+      _cart[cartIndex].food.availableQuantity++; // ✅ Restore stock
       if (_cart[cartIndex].quantity > 1) {
         _cart[cartIndex].quantity--;
       } else {
@@ -124,35 +112,21 @@ void updateQuantity(CartItem cartItem, int newQuantity) {
     notifyListeners();
   }
 
-  // ✅ Remove a specific addon from an item
-  void removeAddon(CartItem cartItem, Addon addon) {
-    int cartIndex = _cart.indexOf(cartItem);
-    if (cartIndex != -1) {
-      _cart[cartIndex].selectedAddons.remove(addon);
-      notifyListeners();
-    }
-  }
-
-  // ✅ Get total price (Food only, since addons are free)
-  double getTotalPrice() {
-    double total = 0;
-    for (CartItem cartItem in _cart) {
-      total += cartItem.food.price * cartItem.quantity;
-    }
-    return total;
-  }
-
   // ✅ Get total number of items in the cart
   int getTotalItemCount() {
-    int totalItemCount = 0;
-    for (CartItem cartItem in _cart) {
-      totalItemCount += cartItem.quantity;
-    }
-    return totalItemCount;
+    return _cart.fold(0, (sum, item) => sum + item.quantity);
   }
 
-  // ✅ Clear cart
+  // ✅ Get total price
+  double getTotalPrice() {
+    return _cart.fold(0, (sum, item) => sum + (item.food.price * item.quantity));
+  }
+
+  // ✅ Clear cart and restore all stock
   void clearCart() {
+    for (var item in _cart) {
+      item.food.availableQuantity += item.quantity; // ✅ Restore stock
+    }
     _cart.clear();
     notifyListeners();
   }
@@ -164,11 +138,5 @@ void updateQuantity(CartItem cartItem, int newQuantity) {
       list1.map((e) => e.name).toList(),
       list2.map((e) => e.name).toList(),
     );
-  }
-
-  // ✅ Add new food item to the menu
-  void addFood(Food food) {
-    _menu.add(food);
-    notifyListeners();
   }
 }

@@ -50,16 +50,21 @@ class Description extends StatelessWidget {
   const Description({
     super.key,
     required this.description,
+    this.color
   });
 
   final String description;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
     return Text(description,
         style: GoogleFonts.roboto(
-            fontSize: screenWidth * 0.04, fontWeight: FontWeight.w600));
+            fontSize: screenWidth * 0.04, 
+            fontWeight: FontWeight.w600,
+            color: color
+        ));
   }
 }
 
@@ -156,9 +161,11 @@ class FoodPrice extends StatelessWidget {
 class FoodDescription extends StatelessWidget {
   const FoodDescription({
     super.key,
-    required this.description
+    required this.description,
+    this.color
   });
   final String description;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +174,8 @@ class FoodDescription extends StatelessWidget {
       description,
       style: GoogleFonts.roboto(
         fontSize: screenWidth * 0.03,
-        fontWeight: FontWeight.w500
+        fontWeight: FontWeight.w500,
+        color: color
       ),
     );
   }

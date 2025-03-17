@@ -1,3 +1,4 @@
+import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
 import '../ui/sheets/food.dart';
@@ -9,8 +10,8 @@ class FoodTile extends StatelessWidget {
   const FoodTile({
     super.key,
     required this.food,
-    required this.onTap
-
+    required this.onTap, 
+    required int availableItems,
   });
 
   @override
@@ -22,42 +23,53 @@ class FoodTile extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(15.0),
-            child: Row(
-              children: [
-            
-                //Food Details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      FoodName(foodName: food.name),
-                      FoodPrice(foodPrice: '₹${food.price.toString()}'),
+            child: Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                    offset: Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // ✅ Food Image
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: Image.asset(food.image, width: screenWidth * 0.3),
+                  ),
+                  SizedBox(width: screenWidth * 0.07),
 
-                      SizedBox(height: screenWidth * 0.03),
-                      FoodDescription(description: food.description)
-                    ],
-                  )
-                ),
+                  // ✅ Food Details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        FoodName(foodName: food.name),
+                        FoodPrice(foodPrice: '₹${food.price.toString()}'),
+                        SizedBox(height: screenWidth * 0.03),
+                        FoodDescription(description: food.description),
 
-                SizedBox(width: screenWidth * 0.07),
-            
-                //Food Image
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(15),
-                  child: Image.asset(food.image, width: screenWidth * 0.3,)
-                )
-              ],
+                        // ✅ Available Quantity Display
+                        SizedBox(height: screenWidth * 0.03),
+                        FoodDescription(description: 'Available: ${food.availableQuantity}', color: secondaryColor),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
 
-
-        //Divider line:
-        const Divider(
-          color: Colors.transparent,
-          endIndent: 25,
-          indent: 25,
-        )
+        // ✅ Divider line:
+        const Divider(color: Colors.transparent, endIndent: 25, indent: 25),
       ],
     );
   }

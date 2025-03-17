@@ -4,6 +4,7 @@ import '../screens/home_screen.dart';
 import '../screens/cart_screen.dart';
 import '../screens/order_screen.dart';
 import '../screens/profile_screen.dart';
+import '../screens/timeline_screen.dart';
 
 class CustomNavBar extends StatefulWidget {
   const CustomNavBar({super.key});
@@ -19,7 +20,7 @@ class _CustomNavBarState extends State<CustomNavBar> {
   final List<Widget> _screens = [
     HomeScreen(),
     CartScreen(),
-    OrderScreen(),
+    TimelineScreen(),
     ProfileScreen(),
   ];
 

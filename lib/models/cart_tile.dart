@@ -1,4 +1,6 @@
 import 'package:bitetimenew/models/cart_item.dart';
+import 'package:bitetimenew/models/constants.dart';
+import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../ui/sheets/food_menu.dart';
@@ -15,50 +17,6 @@ class CartTile extends StatefulWidget {
 }
 
 class _CartTileState extends State<CartTile> {
-  Addon? selectedAddon;
-  TimeOfDay? selectedTime;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.cartItem.selectedAddons.isNotEmpty) {
-      selectedAddon = widget.cartItem.selectedAddons.first;
-    }
-  }
-
-  // ✅ Function to get icon based on spice level
-  IconData getSpiceIcon(SpiceLevel? level) {
-    switch (level) {
-      case SpiceLevel.medium:
-        return Icons.local_fire_department; // 🌶 Medium Spice
-      case SpiceLevel.full:
-        return Icons.whatshot; // 🔥 Full Spice
-      default:
-        return Icons.check_circle_outline; // ✅ No Spice
-    }
-  }
-
-  // ✅ Open Time Selector
-  Future<void> _pickTime(BuildContext context) async {
-    TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        selectedTime = picked;
-      });
-    }
-  }
-
-  // ✅ Format time with AM/PM
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.period == DayPeriod.am ? "AM" : "PM";
-    return "$hour:$minute $period";
-  }
-
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
@@ -83,12 +41,10 @@ class _CartTileState extends State<CartTile> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ Row 1: Image | Name | Quantity Selector
+            // ✅ Food Image | Name & Price | Quantity Selector
             Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // ✅ Food Image (Left Side)
+                // ✅ Food Image
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Image.asset(
@@ -100,144 +56,117 @@ class _CartTileState extends State<CartTile> {
                 ),
                 SizedBox(width: screenWidth * 0.04),
 
-                // ✅ Food Name & Quantity
+                // ✅ Food Name & Price
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ✅ Food Name
                       Text(
                         widget.cartItem.food.name,
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        overflow: TextOverflow.ellipsis,
                       ),
                       SizedBox(height: 4),
-
-                      // ✅ Food Price (Updated Dynamically)
                       Text(
                         '₹${(widget.cartItem.food.price * widget.cartItem.quantity).toStringAsFixed(2)}',
                         style: TextStyle(color: Colors.grey[800], fontSize: 14),
                       ),
-                      SizedBox(height: 4),
-
-                      // ✅ Quantity Selector (Right Side)
-                      QuantitySelector(
-                        food: widget.cartItem.food,
-                        quantity: widget.cartItem.quantity,
-                        onIncrement: () {
-                          foodMenu.addToCart(widget.cartItem.food, widget.cartItem.selectedAddons);
-                          setState(() {}); // Refresh UI on change
-                        },
-                        onDecrement: () {
-                          foodMenu.removeFromCart(widget.cartItem);
-                          setState(() {}); // Refresh UI on change
-                        },
-                      ),
                     ],
                   ),
+                ),
+
+                // ✅ Quantity Selector
+                QuantitySelector(
+                  food: widget.cartItem.food,
+                  quantity: widget.cartItem.quantity,
+                  onIncrement: () {
+                    foodMenu.addToCart(widget.cartItem.food, widget.cartItem.selectedAddons);
+                    setState(() {});
+                  },
+                  onDecrement: () {
+                    foodMenu.removeFromCart(widget.cartItem);
+                    setState(() {});
+                  },
                 ),
               ],
             ),
 
             SizedBox(height: 8),
 
-            // ✅ Addon Dropdown & Time Selector
+            // ✅ Addons Section with Right-Aligned Dropdown
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // ✅ Addon Dropdown or "No addons added"
+                FoodPrice(foodPrice: "Selected Addons:"),
+
+                // ✅ Addon Selector (Right Aligned)
                 if (widget.cartItem.food.availableAddons.isNotEmpty)
                   Container(
                     width: screenWidth * 0.4,
                     padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.grey[200],
+                      color: secondaryColor,
                       borderRadius: BorderRadius.circular(50),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<Addon>(
-                        value: selectedAddon,
+                        hint: FoodDescription(description: "Select Addon", color: Colors.white),
                         isDense: true,
                         isExpanded: false,
                         icon: Icon(Icons.arrow_drop_down, size: 16, color: Colors.black87),
                         dropdownColor: Colors.white,
                         style: TextStyle(fontSize: 12, color: Colors.black87),
                         elevation: 4,
-                        items: [
-                          if (selectedAddon != null)
-                            DropdownMenuItem<Addon>(
-                              value: null,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.close, color: Colors.red, size: 14),
-                                  SizedBox(width: 6),
-                                  Text("Remove", style: TextStyle(fontSize: 12)),
-                                ],
-                              ),
+                        items: widget.cartItem.food.availableAddons.map((addon) {
+                          return DropdownMenuItem<Addon>(
+                            value: addon,
+                            child: Row(
+                              children: [
+                                Icon(Icons.add_circle_outline, size: 14, color: Colors.green),
+                                SizedBox(width: screenWidth * 0.07),
+                                FoodPrice(foodPrice: addon.name),
+                              ],
                             ),
-                          ...widget.cartItem.food.availableAddons.map((addon) {
-                            return DropdownMenuItem<Addon>(
-                              value: addon,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    getSpiceIcon(addon.spiceLevel),
-                                    color: addon.spiceLevel == SpiceLevel.full ? Colors.red : Colors.orange,
-                                    size: 14,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(addon.name, style: TextStyle(fontSize: 12)),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ],
+                          );
+                        }).toList(),
                         onChanged: (newAddon) {
                           setState(() {
-                            if (newAddon == null) {
-                              widget.cartItem.selectedAddons.clear();
-                              selectedAddon = null;
-                            } else {
-                              widget.cartItem.selectedAddons.clear();
+                            // ✅ If the selected addon is a spice level, ensure only one is selected
+                            if (newAddon!.spiceLevel != SpiceLevel.none) {
+                              widget.cartItem.selectedAddons.removeWhere(
+                                  (addon) => addon.spiceLevel != SpiceLevel.none);
+                            }
+                            if (!widget.cartItem.selectedAddons.contains(newAddon)) {
                               widget.cartItem.selectedAddons.add(newAddon);
-                              selectedAddon = newAddon;
                             }
                           });
                         },
                       ),
                     ),
-                  )
-                else
-                  Text(
-                    "No addons added",
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-
-                // ✅ Time Selector with AM/PM
-                InkWell(
-                  onTap: () => _pickTime(context),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.access_time, color: Colors.blue, size: 16),
-                        SizedBox(width: 6),
-                        Text(
-                          selectedTime != null
-                              ? _formatTime(selectedTime!)
-                              : "Select Time",
-                          style: TextStyle(fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               ],
+            ),
+
+            SizedBox(height: 8),
+
+            // ✅ Display Selected Addons (Centered)
+            Center(
+              child: widget.cartItem.selectedAddons.isNotEmpty
+                  ? Wrap(
+                      spacing: 6,
+                      children: widget.cartItem.selectedAddons.map((addon) {
+                        return Chip(
+                          label: FoodDescription(description: addon.name),
+                          backgroundColor: secondaryColor,
+                          deleteIcon: Icon(Icons.close, size: 14, color: Colors.red),
+                          onDeleted: () {
+                            setState(() {
+                              widget.cartItem.selectedAddons.remove(addon);
+                            });
+                          },
+                        );
+                      }).toList(),
+                    )
+                  : FoodDescription(description: "No addons added", color: const Color.fromARGB(255, 182, 182, 182)),
             ),
           ],
         ),

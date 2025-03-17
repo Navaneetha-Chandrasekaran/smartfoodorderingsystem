@@ -18,6 +18,7 @@ class FoodScreen extends StatefulWidget {
 
 class _FoodScreenState extends State<FoodScreen> {
   late List<bool> _selectedAddons; // ✅ Track selected checkboxes
+  Addon? selectedSpiceAddon; // ✅ Track the selected spice-level addon
 
   @override
   void initState() {
@@ -75,11 +76,13 @@ class _FoodScreenState extends State<FoodScreen> {
                         color: secondaryColor,
                         borderRadius: BorderRadius.circular(50),
                       ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.black,
-                        size: screenWidth * 0.05,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Icon(
+                          Icons.arrow_back_ios,
+                          color: Colors.black,
+                          size: screenWidth * 0.05,
+                        ),
                       ),
                     ),
                   ),
@@ -110,11 +113,31 @@ class _FoodScreenState extends State<FoodScreen> {
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: widget.food.availableAddons.length,
                     itemBuilder: (context, index) {
+                      final addon = widget.food.availableAddons[index];
+
                       return CheckboxListTile(
-                        title: Text(widget.food.availableAddons[index].name),
+                        title: Text(addon.name),
                         value: _selectedAddons[index],
                         onChanged: (bool? value) {
                           setState(() {
+                            if (addon.spiceLevel != SpiceLevel.none) {
+                              // ✅ If addon is a spice level, ensure only one is selected
+                              if (value == true) {
+                                // Uncheck previous spice addon
+                                if (selectedSpiceAddon != null) {
+                                  int previousIndex = widget.food.availableAddons.indexOf(selectedSpiceAddon!);
+                                  if (previousIndex != -1) {
+                                    _selectedAddons[previousIndex] = false;
+                                  }
+                                }
+                                // Select new spice-level addon
+                                selectedSpiceAddon = addon;
+                              } else {
+                                // Remove spice-level addon
+                                selectedSpiceAddon = null;
+                              }
+                            }
+
                             _selectedAddons[index] = value ?? false;
                           });
                         },

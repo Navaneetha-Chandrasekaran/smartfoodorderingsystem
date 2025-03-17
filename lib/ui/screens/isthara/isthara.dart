@@ -58,7 +58,8 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
 
                   return FoodTile(
                     food: food, 
-                    onTap: () => Navigation.navigateTo(context, FoodScreen(food: food)),
+                    onTap: () => Navigation.navigateTo(context, FoodScreen(food: food)), 
+                    availableItems: food.availableQuantity,
                   );
                 },
               ),
