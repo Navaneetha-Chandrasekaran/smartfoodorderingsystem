@@ -122,7 +122,12 @@ class _OtpScreenState extends State<OtpScreen> {
           SizedBox(height: screenHeight * 0.05),
 
           // Verify OTP Button
-          button(label: "Verify OTP", destination: ResetScreen()),
+          button(
+            label: "Verify OTP", 
+            destination: ResetScreen(), 
+            bg: secondaryColor,
+          ),
+          SizedBox(height: screenHeight * 0.1)
         ],
       ),
     );

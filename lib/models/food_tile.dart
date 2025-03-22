@@ -52,7 +52,7 @@ class FoodTile extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         FoodName(foodName: food.name),
-                        FoodPrice(foodPrice: '₹${food.price.toString()}'),
+                        FoodPrice(foodPrice: '\u{20B9}${food.price.toString()}'),
                         SizedBox(height: screenWidth * 0.03),
                         FoodDescription(description: food.description),
 

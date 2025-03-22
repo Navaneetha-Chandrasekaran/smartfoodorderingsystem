@@ -64,7 +64,7 @@ class _CartScreenState extends State<CartScreen> {
         if (!mounted) return;
 
         setState(() => _isOrderPlaced = false);
-        foodMenu.clearCart();
+        foodMenu.placeOrder();
 
         // ✅ Navigate to Timeline Screen after all animations
         Navigator.pushReplacement(
@@ -127,7 +127,9 @@ class _CartScreenState extends State<CartScreen> {
                               TimeSelector(
                                 selectedTime: _selectedTime,
                                 onTimeSelected: (time) {
-                                  setState(() => _selectedTime = time);
+                                  setState(() {
+                                    _selectedTime = time;
+                                  });
                                 },
                               ),
 

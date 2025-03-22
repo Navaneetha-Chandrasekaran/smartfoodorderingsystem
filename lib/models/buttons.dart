@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+import '../ui/screens/timeline_screen.dart';
 import '../ui/sheets/food.dart';
 import 'constants.dart';
 import 'titles.dart';
@@ -45,6 +45,7 @@ class CartButton extends StatelessWidget {
   }
 }
 
+
 class button extends StatelessWidget {
   const button({
     super.key,
@@ -54,14 +55,16 @@ class button extends StatelessWidget {
     this.height,
     this.onPressed,
     this.bg,
+    this.labelColor, // New parameter for text color
   });
 
   final String label;
   final Widget? destination;
   final double? width;
   final double? height;
-  final VoidCallback? onPressed; // onPressed callback for button
+  final VoidCallback? onPressed;
   final Color? bg;
+  final Color? labelColor; // Allows setting text color dynamically
 
   @override
   Widget build(BuildContext context) {
@@ -72,19 +75,35 @@ class button extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(50),
-        onTap: onPressed, // Trigger the onPressed callback
+        onTap: () {
+          if (onPressed != null) {
+            onPressed!();
+          }
+          if (destination != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => destination!),
+            );
+          }
+        },
         child: Container(
           width: width ?? screenWidth * 0.75,
           height: height ?? screenHeight * 0.06,
           decoration: BoxDecoration(
-            color: bg ?? Colors.transparent, // Background color if provided
-            gradient: bg == null ? const LinearGradient(colors: [Colors.blue, Colors.green]) : null, // Default gradient if no bg
+            color: bg ?? Colors.transparent,
+            gradient: bg == null
+                ? const LinearGradient(colors: [Colors.blue, Colors.green])
+                : null,
             borderRadius: BorderRadius.circular(50),
           ),
           child: Center(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: labelColor ?? Colors.white, // Default to white if not provided
+              ),
             ),
           ),
         ),
@@ -92,6 +111,67 @@ class button extends StatelessWidget {
     );
   }
 }
+
+class CancelButton extends StatelessWidget {
+  final String label;
+  final Color? color;
+  final Color? labelColor;
+
+  const CancelButton({
+    super.key,
+    required this.label,
+    this.color,
+    this.labelColor, required Function() onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    return InkWell(
+      onTap: () => _showCancelReasonSheet(context), // ✅ Show BottomSheet on tap
+      child: Container(
+        width: screenWidth * 0.75,
+        height: screenWidth * 0.15, // ✅ Adjusted height
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: color ?? Colors.red,
+        ),
+        child: Center(child: SubTitles(title: label, color: labelColor ?? Colors.white)),
+      ),
+    );
+  }
+
+  // ✅ Show BottomSheet for cancel reasons
+  void _showCancelReasonSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return CancelReasonSheet(
+          onConfirm: (String reason) {
+            Navigator.pop(context); // ✅ Close BottomSheet
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Order cancelled: $reason")),
+            );
+            _triggerNoOrdersScreen(context); // ✅ Trigger "No Orders" screen
+          },
+        );
+      },
+    );
+  }
+
+  // ✅ Navigates to "No Orders" Screen
+  void _triggerNoOrdersScreen(BuildContext context) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const TimelineScreen()), // ✅ Reloads timeline to show "No Orders"
+    );
+  }
+}
+
+
 
 class OrderButton extends StatelessWidget {
   final VoidCallback? onPressed;

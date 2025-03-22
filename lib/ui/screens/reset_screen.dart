@@ -87,7 +87,12 @@ class _ResetScreenState extends State<ResetScreen> {
                 ),
 
                 SizedBox(height: screenHeight * 0.1),
-                button(label: "Confirm", destination: LoginScreen()),
+                Center(child: button(
+                  label: "Confirm", 
+                  destination: LoginScreen(), 
+                  bg: secondaryColor,
+                  labelColor: Colors.black
+                )),
               ],
             ),
           ),

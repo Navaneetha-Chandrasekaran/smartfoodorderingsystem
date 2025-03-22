@@ -71,45 +71,52 @@ final List<Food> _menu = [
   ),
 ];
 
+  final List<CartItem> _cart = [];
+  List<CartItem> _lastOrderedItems = [];
+  bool _isOrderCancelled = false;
 
   List<Food> get menu => _menu;
   List<CartItem> get cart => _cart;
-
-  final List<CartItem> _cart = [];
+  List<CartItem> get lastOrderedItems => _lastOrderedItems;
+  bool get isOrderCancelled => _isOrderCancelled;
 
   // ✅ Add to Cart (Decreases Available Stock)
   void addToCart(Food food, List<Addon> selectedAddons) {
-    if (food.availableQuantity > 0) { // ✅ Only add if in stock
-      food.availableQuantity--; // ✅ Reduce stock
+    if (food.availableQuantity > 0) {
+      food.availableQuantity--;
 
-      CartItem? cartItem = _cart.firstWhereOrNull((item) {
-        bool isSameFood = item.food == food;
-        bool isSameAddons = _areAddonsEqual(item.selectedAddons, selectedAddons);
-        return isSameFood && isSameAddons;
-      });
+      CartItem? cartItem = _cart.firstWhereOrNull((item) =>
+          item.food == food && _areAddonsEqual(item.selectedAddons, selectedAddons));
 
       if (cartItem != null) {
         cartItem.quantity++;
       } else {
         _cart.add(CartItem(food: food, selectedAddons: selectedAddons, quantity: 1));
       }
+      notifyListeners();
+    }
+  }
 
+  // ✅ Place Order (Saves Last Ordered Items & Clears Cart)
+  void placeOrder() {
+    if(_cart.isNotEmpty){
+      _lastOrderedItems = List.from(_cart);
+      _cart.clear();
       notifyListeners();
     }
   }
 
   // ✅ Remove from Cart (Restores Stock)
   void removeFromCart(CartItem cartItem) {
-    int cartIndex = _cart.indexOf(cartItem);
-    if (cartIndex != -1) {
-      _cart[cartIndex].food.availableQuantity++; // ✅ Restore stock
-      if (_cart[cartIndex].quantity > 1) {
-        _cart[cartIndex].quantity--;
+    if (_cart.contains(cartItem)) {
+      cartItem.food.availableQuantity++;
+      if (cartItem.quantity > 1) {
+        cartItem.quantity--;
       } else {
-        _cart.removeAt(cartIndex);
+        _cart.remove(cartItem);
       }
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   // ✅ Get total number of items in the cart
@@ -131,10 +138,23 @@ final List<Food> _menu = [
     notifyListeners();
   }
 
+  // ✅ Clear last ordered items when order is canceled
+  void cancelOrder() {
+    _lastOrderedItems.clear();
+    _isOrderCancelled = true;
+    notifyListeners(); // ✅ Notify UI to update
+  }
+
+  // ✅ Reset order cancellation status
+  void resetOrderStatus() {
+    _isOrderCancelled = false;
+    notifyListeners();
+  }
+
+
   // ✅ Check if two addon lists are the same
   bool _areAddonsEqual(List<Addon> list1, List<Addon> list2) {
-    final deepEq = const DeepCollectionEquality().equals;
-    return deepEq(
+    return const DeepCollectionEquality().equals(
       list1.map((e) => e.name).toList(),
       list2.map((e) => e.name).toList(),
     );

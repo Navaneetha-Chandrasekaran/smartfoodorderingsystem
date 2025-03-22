@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // ✅ Import for date formatting
-import 'package:bitetimenew/models/titles.dart';
 
 class TimeSelector extends StatefulWidget {
   final TimeOfDay? selectedTime;
@@ -18,28 +17,23 @@ class TimeSelector extends StatefulWidget {
 
 class _TimeSelectorState extends State<TimeSelector> {
   TimeOfDay? _selectedTime;
-  String _currentDate = ""; // ✅ Initialize with an empty string
+  String _currentDate = ""; // ✅ Store current date
 
   @override
   void initState() {
     super.initState();
     _selectedTime = widget.selectedTime;
-    _currentDate = _getCurrentDate(); // ✅ Get the current date on init
+    _currentDate = _getCurrentDate(); // ✅ Get current date on init
   }
 
   Future<void> _pickTime(BuildContext context) async {
-    // ✅ Get current time and add 10 minutes
+    // ✅ Get current time
     DateTime now = DateTime.now();
-    DateTime minTime = now.add(const Duration(minutes: 10));
 
-    TimeOfDay minSelectableTime = TimeOfDay(
-      hour: minTime.hour,
-      minute: minTime.minute,
-    );
-
+    // ✅ Show time picker
     TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: minSelectableTime, // ✅ Set min selectable time
+      initialTime: TimeOfDay.fromDateTime(now),
     );
 
     if (picked != null) {
@@ -52,13 +46,14 @@ class _TimeSelectorState extends State<TimeSelector> {
       );
 
       // ✅ Ensure selected time is at least 10 minutes ahead
-      if (pickedDateTime.isAfter(minTime)) {
+      if (pickedDateTime.isAfter(now.add(const Duration(minutes: 10)))) {
         setState(() {
           _selectedTime = picked;
         });
-        widget.onTimeSelected(picked);
+
+        widget.onTimeSelected(picked); // ✅ Notify parent widget
       } else {
-        // ✅ Show error message
+        // ✅ Show error message **ONLY IF time is invalid**
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Please select a time at least 10 minutes from now."),
@@ -79,7 +74,7 @@ class _TimeSelectorState extends State<TimeSelector> {
 
   // ✅ Get Current Date
   String _getCurrentDate() {
-    return DateFormat("EEEE, MMM d, yyyy").format(DateTime.now()); // Example: Monday, Mar 18, 2025
+    return DateFormat("EEEE, MMM d, yyyy").format(DateTime.now());
   }
 
   @override
@@ -117,10 +112,11 @@ class _TimeSelectorState extends State<TimeSelector> {
               children: [
                 const Icon(Icons.access_time, color: Colors.blue, size: 18),
                 const SizedBox(width: 6),
-                Description(
-                  description: _selectedTime != null
+                Text(
+                  _selectedTime != null
                       ? _formatTime(_selectedTime!)
                       : "Select Time",
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
