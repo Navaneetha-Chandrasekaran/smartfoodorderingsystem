@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../ui/screens/login_screen.dart';
+import '../ui/user/screens/login_screen.dart';
 import 'titles.dart';
-import 'package:bitetimenew/ui/sheets/navigator.dart';
+import 'package:bitetimenew/sheets/navigator.dart';
 
 
 //Primary color

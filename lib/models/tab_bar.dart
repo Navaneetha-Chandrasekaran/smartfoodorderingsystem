@@ -1,4 +1,4 @@
-import 'package:bitetimenew/ui/sheets/food.dart';
+import 'package:bitetimenew/ui/user/screens/isthara/food.dart';
 import 'package:flutter/material.dart';
 
 class MyTabBar extends StatelessWidget {

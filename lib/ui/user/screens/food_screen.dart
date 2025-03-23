@@ -3,10 +3,10 @@ import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/buttons.dart';
-import '../sheets/food.dart';
-import '../sheets/food_menu.dart';
-import '../sheets/navigator.dart';
+import '../../../models/buttons.dart';
+import 'isthara/food.dart';
+import 'isthara/food_menu.dart';
+import '../../../sheets/navigator.dart';
 
 class FoodScreen extends StatefulWidget {
   final Food food;

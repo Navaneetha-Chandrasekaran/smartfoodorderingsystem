@@ -1,8 +1,8 @@
-import 'package:bitetimenew/ui/screens/cart_screen.dart';
+import 'package:bitetimenew/ui/user/screens/cart_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:bitetimenew/models/constants.dart';
 
-import '../ui/sheets/navigator.dart';
+import '../sheets/navigator.dart';
 import 'titles.dart';
 
 class MySliverAppBar extends StatelessWidget {

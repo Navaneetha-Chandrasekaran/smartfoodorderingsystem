@@ -7,11 +7,11 @@ import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/payment_selector.dart';
 import 'package:bitetimenew/models/time_selector.dart';
 import 'package:bitetimenew/models/titles.dart';
-import 'package:bitetimenew/ui/sheets/food_menu.dart';
-import 'package:bitetimenew/ui/sheets/navigator.dart';
-import 'package:bitetimenew/ui/sheets/navbar.dart';
+import 'package:bitetimenew/ui/user/screens/isthara/food_menu.dart';
+import 'package:bitetimenew/sheets/navigator.dart';
+import 'package:bitetimenew/ui/user/sheets/navbar.dart';
 import 'package:bitetimenew/models/buttons.dart';
-import 'package:bitetimenew/ui/screens/timeline_screen.dart';
+import 'package:bitetimenew/ui/user/screens/timeline_screen.dart';
 import '../sheets/shared_prefs.dart';
 
 class CartScreen extends StatefulWidget {
@@ -78,7 +78,9 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-    final userCart = Provider.of<FoodMenu>(context).cart;
+    final foodMenu = Provider.of<FoodMenu>(context);
+    final userCart = foodMenu.cart;
+    final totalCost = foodMenu.getTotalPrice(); // ✅ Get total cost of cart
 
     return Scaffold(
       appBar: AppBar(
@@ -112,16 +114,41 @@ class _CartScreenState extends State<CartScreen> {
       body: Stack(
         children: [
           _isOrderProcessing
-              ?  LoadingAnimation()
+              ? LoadingAnimation()
               : _isOrderPlaced
-                  ?  OrderPlacedAnimation()
+                  ? OrderPlacedAnimation()
                   : userCart.isEmpty
                       ? _buildEmptyCartUI(context)
                       : SingleChildScrollView(
                           child: Column(
                             children: [
                               _buildCartItems(userCart),
-                              SizedBox(height: screenWidth * 0.05),
+                              const SizedBox(height: 10),
+
+                              // ✅ Total Cost Section (Added Below Ordered Food)
+                              Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                padding: const EdgeInsets.all(15),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      "Total Cost:",
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      "₹${totalCost.toStringAsFixed(2)}",
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 10),
 
                               // ✅ Common Time Selector
                               TimeSelector(

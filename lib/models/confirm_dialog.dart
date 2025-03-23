@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:bitetimenew/ui/sheets/navbar.dart'; // Import CustomNavBar
+import 'package:bitetimenew/ui/user/sheets/navbar.dart'; // Import CustomNavBar
 
 class ConfirmationDialog extends StatelessWidget {
   final VoidCallback onConfirm;

@@ -1,15 +1,15 @@
 import 'package:bitetimenew/models/food_tile.dart';
-import 'package:bitetimenew/ui/screens/food_screen.dart';
+import 'package:bitetimenew/ui/user/screens/food_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:bitetimenew/models/drawer.dart';
 import 'package:bitetimenew/models/sliver_appbar.dart';
 import 'package:bitetimenew/models/tab_bar.dart';
 import 'package:bitetimenew/models/titles.dart';
-import 'package:bitetimenew/ui/sheets/food.dart';
-import 'package:bitetimenew/ui/sheets/food_menu.dart';
+import 'package:bitetimenew/ui/user/screens/isthara/food.dart';
+import 'package:bitetimenew/ui/user/screens/isthara/food_menu.dart';
 
-import '../../sheets/navigator.dart';
+import '../../../../sheets/navigator.dart';
 
 class IstharaScreen extends StatefulWidget {
   const IstharaScreen({super.key});

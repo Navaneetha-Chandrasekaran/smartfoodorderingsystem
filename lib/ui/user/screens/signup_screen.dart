@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../models/constants.dart';
-import '../../models/titles.dart';
-import '../sheets/navigator.dart';
+import '../../../models/constants.dart';
+import '../../../models/titles.dart';
+import '../../../sheets/navigator.dart';
 import 'login_screen.dart';
-import 'otp_screen.dart';
+import '../../../sheets/otp_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});

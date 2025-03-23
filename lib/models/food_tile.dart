@@ -1,7 +1,7 @@
 import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
-import '../ui/sheets/food.dart';
+import '../ui/user/screens/isthara/food.dart';
 
 class FoodTile extends StatelessWidget {
   final Food food;

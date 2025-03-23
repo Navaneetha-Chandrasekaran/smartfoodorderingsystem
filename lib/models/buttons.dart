@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../ui/screens/timeline_screen.dart';
-import '../ui/sheets/food.dart';
+import '../ui/user/screens/timeline_screen.dart';
+import '../ui/user/screens/isthara/food.dart';
 import 'constants.dart';
 import 'titles.dart';
 

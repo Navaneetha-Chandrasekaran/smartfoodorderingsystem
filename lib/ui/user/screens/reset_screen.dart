@@ -4,9 +4,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../../models/buttons.dart';
-import '../../models/constants.dart';
-import '../../models/titles.dart';
+import '../../../models/buttons.dart';
+import '../../../models/constants.dart';
+import '../../../models/titles.dart';
 import 'login_screen.dart';
 
 class ResetScreen extends StatefulWidget {

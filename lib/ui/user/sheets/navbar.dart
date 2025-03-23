@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../models/constants.dart';
+import '../../../models/constants.dart';
 import '../screens/home_screen.dart';
 import '../screens/cart_screen.dart';
-import '../screens/order_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/timeline_screen.dart';
 

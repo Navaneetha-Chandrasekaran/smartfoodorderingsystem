@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../theme/theme_provider.dart';
-import '../sheets/navigator.dart';
+import '../../../theme/theme_provider.dart';
+import '../../../sheets/navigator.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});

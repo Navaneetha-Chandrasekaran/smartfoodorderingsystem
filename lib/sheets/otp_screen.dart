@@ -6,10 +6,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pinput/pinput.dart';
 
-import '../../models/buttons.dart';
-import '../../models/constants.dart';
-import '../../models/titles.dart';
-import 'reset_screen.dart';
+import '../models/buttons.dart';
+import '../models/constants.dart';
+import '../models/titles.dart';
+import '../ui/user/screens/reset_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   const OtpScreen({super.key});

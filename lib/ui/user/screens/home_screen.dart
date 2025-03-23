@@ -1,9 +1,9 @@
-import 'package:bitetimenew/ui/screens/isthara/isthara.dart';
-import 'package:bitetimenew/ui/screens/notfication_screen.dart';
+import 'package:bitetimenew/ui/user/screens/isthara/isthara.dart';
+import 'package:bitetimenew/ui/user/screens/notfication_screen.dart';
 import 'package:flutter/material.dart';
-import '../../models/constants.dart';
-import '../../models/titles.dart';
-import '../sheets/navigator.dart';
+import '../../../models/constants.dart';
+import '../../../models/titles.dart';
+import '../../../sheets/navigator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

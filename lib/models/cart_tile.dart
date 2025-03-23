@@ -3,9 +3,9 @@ import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../ui/sheets/food_menu.dart';
+import '../ui/user/screens/isthara/food_menu.dart';
 import 'buttons.dart';
-import '../ui/sheets/food.dart';
+import '../ui/user/screens/isthara/food.dart';
 
 class CartTile extends StatefulWidget {
   final CartItem cartItem;

@@ -1,8 +1,7 @@
 import 'package:bitetimenew/models/constants.dart';
-import 'package:bitetimenew/ui/screens/home_screen.dart';
-import 'package:bitetimenew/ui/screens/settings_screen.dart';
-import 'package:bitetimenew/ui/sheets/navbar.dart';
-import '../ui/sheets/navigator.dart';
+import 'package:bitetimenew/ui/user/screens/settings_screen.dart';
+import 'package:bitetimenew/ui/user/sheets/navbar.dart';
+import '../sheets/navigator.dart';
 import 'package:bitetimenew/models/drawer_tile.dart';
 import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';

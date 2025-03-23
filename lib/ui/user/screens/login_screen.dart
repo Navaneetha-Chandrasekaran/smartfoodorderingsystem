@@ -1,11 +1,11 @@
-import 'package:bitetimenew/ui/sheets/navbar.dart';
+import 'package:bitetimenew/ui/user/sheets/navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../models/constants.dart';
-import '../../models/titles.dart';
-import '../sheets/navigator.dart';
+import '../../../models/constants.dart';
+import '../../../models/titles.dart';
+import '../../../sheets/navigator.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {

@@ -1,10 +1,13 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unused_import
 
+import 'package:bitetimenew/models/buttons.dart';
+import 'package:bitetimenew/ui/user/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../models/constants.dart';
+import 'models/constants.dart';
+import 'sheets/navigator.dart';
 
 class UserSelectionScreen extends StatefulWidget {
   const UserSelectionScreen({super.key});
@@ -36,9 +39,9 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
             SizedBox(height: screenHeight * 0.02),
             Image.asset("assets/user.png"),
             SizedBox(height: screenHeight * 0.04),
-            userButton(userType: 'Student/Faculty'),
+            button(label: 'Student', onPressed: () => Navigation.navigateTo(context, LoginScreen()),bg: secondaryColor, labelColor: Colors.black),
             SizedBox(height: screenHeight * 0.04),
-            userButton(userType: 'Canteen Staff'),
+            button(label: 'Canteen Staff', onPressed: () => Navigation.navigateTo(context, LoginScreen()),bg: secondaryColor, labelColor: Colors.black),
             SizedBox(height: screenHeight * 0.04),
             // userButton(userType: 'Admin'),
           ],
