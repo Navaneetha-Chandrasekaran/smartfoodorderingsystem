@@ -1,4 +1,4 @@
-import 'package:bitetimenew/ui/user/screens/isthara/food.dart';
+import 'package:bitetimenew/food.dart';
 import 'package:flutter/material.dart';
 
 class CartItem {
@@ -6,12 +6,16 @@ class CartItem {
   List<Addon> selectedAddons;
   int quantity;
   TimeOfDay? selectedTime;
+  String? otp;
+  String? paymentMode;
 
   CartItem({
     required this.food,
     this.selectedAddons = const[],
     this.quantity = 1,
     this.selectedTime,
+    this.otp,
+    this.paymentMode
   });
 
   double get totalPrice{

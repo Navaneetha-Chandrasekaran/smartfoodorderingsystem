@@ -5,17 +5,24 @@ class Titles extends StatelessWidget {
   const Titles({
     super.key,
     required this.title,
+    this.color
   });
 
   final String title;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
 
-    return Text(title,
-        style: GoogleFonts.roboto(
-            fontSize: screenWidth * 0.06, fontWeight: FontWeight.w600));
+    return Text(
+      title,
+      style: GoogleFonts.roboto(
+        fontSize: screenWidth * 0.06, 
+        fontWeight: FontWeight.w600,
+        color: color
+      )
+    );
   }
 }
 
@@ -86,13 +93,7 @@ class rowText extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          text,
-          style: GoogleFonts.roboto(
-            fontSize: screenWidth * 0.04,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        Description(description: text),
         TextButton(
           onPressed: () {
             Navigator.push(

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
 import '../../../models/titles.dart';
-import '../../../sheets/navigator.dart';
 import 'login_screen.dart';
 import '../../../sheets/otp_screen.dart';
 
@@ -43,23 +42,53 @@ class _SignUpScreenState extends State<SignUpScreen> {
     double screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      body: ListView(
-        children: [
-          Column(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF40CF58), Color(0xFF4AFD69)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
             children: [
-              SizedBox(height: screenHeight * 0.1),
-              Center(
-                child: Text(
-                  "Create Your Account",
-                  style: GoogleFonts.roboto(
-                      fontSize: screenWidth * 0.07,
-                      fontWeight: FontWeight.bold),
+              SizedBox(height: screenHeight * 0.08),
+
+              /// ✅ **Title**
+              Text(
+                "Create Your Account",
+                style: GoogleFonts.poppins(
+                  fontSize: screenWidth * 0.07,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
                 ),
               ),
+
               SizedBox(height: screenHeight * 0.03),
+
+              /// ✅ **App Logo**
               Image.asset("assets/logo.png", width: screenWidth * 0.7),
+
+              SizedBox(height: screenHeight * 0.03),
+
+              /// ✅ **Sign Up Form with Button & Navigation**
               Container(
-                margin: EdgeInsets.symmetric(horizontal: 30),
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+                margin: const EdgeInsets.symmetric(horizontal: 30),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12.withOpacity(0.2),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -94,51 +123,38 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       isPasswordVisible: _isConfirmPasswordVisible,
                       togglePasswordVisibility: toggleConfirmPasswordVisibility,
                     ),
+
+                    SizedBox(height: screenHeight * 0.02),
+
+                    /// ✅ **Register Button**
+                    CustomButton(
+                      label: "Register",
+                      destination: OtpScreen(),
+                      labelColor: Colors.white,
+                      width: double.infinity,
+                      height: screenHeight * 0.07,
+                      icon: Icons.arrow_forward, // ✅ Icon on the right
+                    ),
+
+
+
+                    SizedBox(height: screenHeight * 0.02),
+
+                    /// ✅ **Already Have an Account?**
+                    Center(
+                      child: rowText(
+                        text: "Already have an account?",
+                        buttonText: "Sign In",
+                        destination: UserLoginScreen(),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              SizedBox(height: screenHeight * 0.03),
-              GestureDetector(
-                onTap: () {
-                  Navigation.navigateTo(context, OtpScreen());
-                },
-                child: Container(
-                  width: screenWidth * 0.75,
-                  height: screenHeight * 0.06,
-                  margin: EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    gradient: primaryColor,
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(width: screenWidth * 0.22),
-                      Text(
-                        "Register",
-                        style: GoogleFonts.roboto(
-                            fontSize: screenWidth * 0.07,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black),
-                      ),
-                      SizedBox(width: screenWidth * 0.12),
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.white,
-                        child: SvgPicture.asset("assets/icons/right.svg"),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: screenHeight * 0.03),
-              rowText(
-                  text: "Already have an account?",
-                  buttonText: "Sign In",
-                  destination: LoginScreen()),
+              SizedBox(height: screenHeight * 0.07)
             ],
           ),
-        ],
+        ),
       ),
     );
   }

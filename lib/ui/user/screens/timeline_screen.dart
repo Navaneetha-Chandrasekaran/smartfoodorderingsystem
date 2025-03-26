@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:math'; 
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/buttons.dart';
 import '../../../models/event_card.dart';
 import '../../../models/timeline.dart';
 import '../../../models/cart_item.dart';
-import 'isthara/food_menu.dart';
-import '../sheets/navbar.dart';
+import '../../../food_menu.dart';
 
 class TimelineScreen extends StatefulWidget {
   const TimelineScreen({super.key});
@@ -18,29 +17,28 @@ class TimelineScreen extends StatefulWidget {
 
 class _TimelineScreenState extends State<TimelineScreen> {
   int _currentStep = 0;
-  String _orderOtp = ''; 
+  String _orderOtp = '';
   Timer? _pickupTimer;
-  int _remainingSeconds = 600; // ✅ 10-minute timer (600 seconds)
+  int _remainingSeconds = 600; // ✅ 10-minute timer
   bool _pickupTimeExpired = false;
-  bool _orderCancelled = false; // ✅ Track if order is cancelled
+  bool _orderCancelled = false;
 
   @override
   void initState() {
     super.initState();
     _generateOtp();
-    _startTimelineAnimation();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startTimelineAnimation());
   }
 
   void _generateOtp() {
-    Random random = Random();
     setState(() {
-      _orderOtp = (1000 + random.nextInt(9000)).toString();
+      _orderOtp = (1000 + Random().nextInt(9000)).toString();
     });
   }
 
   void _startTimelineAnimation() async {
-    for (int i = 0; i <= 3; i++) {
-      await Future.delayed(const Duration(seconds: 2), () {
+    for (int i = 0; i < 4; i++) {
+      await Future.delayed(const Duration(seconds: 1), () {
         if (mounted) {
           setState(() {
             _currentStep = i + 1;
@@ -67,8 +65,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   void _cancelOrder(String reason) {
     final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-    foodMenu.cancelOrder(); // ✅ Clear last ordered items
-
+    foodMenu.cancelOrder();
     _pickupTimer?.cancel();
 
     setState(() {
@@ -76,15 +73,9 @@ class _TimelineScreenState extends State<TimelineScreen> {
       _orderOtp = '';
       _pickupTimeExpired = false;
       _remainingSeconds = 600;
-      _orderCancelled = true; // ✅ Set order as cancelled
+      _orderCancelled = true;
     });
 
-    // ✅ Ensure UI updates AFTER clearing last ordered items
-    Future.delayed(const Duration(milliseconds: 200), () {
-      setState(() {}); // ✅ Force UI rebuild
-    });
-
-    // ✅ Show cancellation reason as a SnackBar
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Order cancelled: $reason")),
     );
@@ -98,109 +89,106 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    double screenWidth = MediaQuery.of(context).size.width;
     final orderedItems = Provider.of<FoodMenu>(context).lastOrderedItems;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text("Order Timeline"),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: (_orderCancelled || orderedItems.isEmpty) // ✅ If order is cancelled, show no order message
+      body: (_orderCancelled || orderedItems.isEmpty)
           ? _buildNoOrderMessage()
           : ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               children: [
                 const SizedBox(height: 20),
-
-                // ✅ Order OTP Display
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    "Order OTP: $_orderOtp",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
-
+                _buildOtpDisplay(),
                 const SizedBox(height: 20),
-
-                // ✅ Ordered Food Items List
                 _buildOrderedFoodList(orderedItems),
-
                 const SizedBox(height: 20),
-
-                // ✅ Timeline Steps using `Timeline` widget
-                Timeline(
-                  isFirst: true,
-                  isLast: false,
-                  isPast: _currentStep >= 1,
-                  eventCard: EventCard(isPast: _currentStep >= 1, child: const Text('Order Placed')),
-                ),
-                Timeline(
-                  isFirst: false,
-                  isLast: false,
-                  isPast: _currentStep >= 2,
-                  eventCard: EventCard(isPast: _currentStep >= 2, child: const Text('Order Confirmed')),
-                ),
-                Timeline(
-                  isFirst: false,
-                  isLast: false,
-                  isPast: _currentStep >= 3,
-                  eventCard: EventCard(isPast: _currentStep >= 3, child: const Text('Order getting ready')),
-                ),
-                Timeline(
-                  isFirst: false,
-                  isLast: true,
-                  isPast: _currentStep >= 4,
-                  eventCard: EventCard(isPast: _currentStep >= 4, child: const Text('Ready for Pickup')),
-                ),
-
-                // ✅ Pickup Timer Section
+                _buildTimelineSteps(),
                 if (_currentStep == 4) _buildPickupTimer(),
-
-                // ✅ Cancel Order Button
-                SizedBox(height: screenWidth * 0.08),
-                CancelButton(
-                  label: 'Cancel Order',
-                  onTap: () => _showCancelReasonSheet(context),
+                const SizedBox(height: 20),
+                CustomButton(
+                  label: "Cancel Order",
+                  gradientColors: [Colors.redAccent, Colors.red],
+                  onPressed: () => _showCancelReasonSheet(context),
+                  hasBorder: true,
+                  borderColor: Colors.white,
                 ),
-                SizedBox(height: screenWidth * 0.1),
+                const SizedBox(height: 30),
               ],
             ),
     );
   }
 
+  /// ✅ **Stylish OTP Display**
+  Widget _buildOtpDisplay() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF4A00E0), Color(0xFF8E2DE2)]),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, spreadRadius: 1)],
+      ),
+      child: Center(
+        child: Text(
+          "Order OTP: $_orderOtp",
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+      ),
+    );
+  }
 
-    // ✅ Build Pickup Timer UI
-  Widget _buildPickupTimer() {
-    int minutes = _remainingSeconds ~/ 60;
-    int seconds = _remainingSeconds % 60;
-
+  /// ✅ **Timeline Steps with Animated Event Cards**
+  Widget _buildTimelineSteps() {
     return Column(
       children: [
-        Text(
-          _pickupTimeExpired
-              ? "Pickup time expired!"
-              : "Pickup Time Remaining: $minutes:${seconds.toString().padLeft(2, '0')}",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: _pickupTimeExpired ? Colors.red : Colors.green,
-          ),
+        Timeline(
+          isFirst: true,
+          isLast: false,
+          isPast: _currentStep >= 1,
+          eventCard: EventCard(isPast: _currentStep >= 1, child: const Text('Order Placed')),
         ),
-        const SizedBox(height: 10),
+        Timeline(
+          isFirst: false,
+          isLast: false,
+          isPast: _currentStep >= 2,
+          eventCard: EventCard(isPast: _currentStep >= 2, child: const Text('Order Confirmed')),
+        ),
+        Timeline(
+          isFirst: false,
+          isLast: false,
+          isPast: _currentStep >= 3,
+          eventCard: EventCard(isPast: _currentStep >= 3, child: const Text('Order Getting Ready')),
+        ),
+        Timeline(
+          isFirst: false,
+          isLast: true,
+          isPast: _currentStep >= 4,
+          eventCard: EventCard(isPast: _currentStep >= 4, child: const Text('Ready for Pickup')),
+        ),
       ],
     );
   }
 
-  // ✅ Build "No Orders" Message
+  /// ✅ **Pickup Timer UI**
+  Widget _buildPickupTimer() {
+    int minutes = _remainingSeconds ~/ 60;
+    int seconds = _remainingSeconds % 60;
+
+    return Center(
+      child: Text(
+        _pickupTimeExpired ? "Pickup time expired!" : "Pickup Time Remaining: $minutes:${seconds.toString().padLeft(2, '0')}",
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _pickupTimeExpired ? Colors.red : Colors.green),
+      ),
+    );
+  }
+
+  /// ✅ **"No Orders" Message**
   Widget _buildNoOrderMessage() {
     return Center(
       child: Column(
@@ -208,26 +196,17 @@ class _TimelineScreenState extends State<TimelineScreen> {
         children: [
           Image.asset('assets/no-order.png', width: 200),
           const SizedBox(height: 20),
-          const Text(
-            "No current orders.",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
+          const Text("No current orders.", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           const Text("Looks like you haven't placed an order yet.", style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 20),
-          button(
-            label: 'Browse Menu',
-            bg: Colors.blue,
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const CustomNavBar()),
-            ),
-          ),
+          CustomButton(label: 'Browse Menu', gradientColors: [Colors.blue, Colors.purple]),
         ],
       ),
     );
   }
 }
+
 
 // ✅ Build Individual Ordered Food Tile
   Widget _buildFoodItemTile(CartItem cartItem) {

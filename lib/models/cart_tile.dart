@@ -3,9 +3,9 @@ import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../ui/user/screens/isthara/food_menu.dart';
+import '../food_menu.dart';
 import 'buttons.dart';
-import '../ui/user/screens/isthara/food.dart';
+import '../food.dart';
 
 class CartTile extends StatefulWidget {
   final CartItem cartItem;
@@ -102,7 +102,7 @@ class _CartTileState extends State<CartTile> {
                 if (widget.cartItem.food.availableAddons.isNotEmpty)
                   Container(
                     width: screenWidth * 0.4,
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                     decoration: BoxDecoration(
                       color: secondaryColor,
                       borderRadius: BorderRadius.circular(50),

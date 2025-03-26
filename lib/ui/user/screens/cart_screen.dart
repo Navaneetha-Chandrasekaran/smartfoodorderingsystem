@@ -7,7 +7,7 @@ import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/payment_selector.dart';
 import 'package:bitetimenew/models/time_selector.dart';
 import 'package:bitetimenew/models/titles.dart';
-import 'package:bitetimenew/ui/user/screens/isthara/food_menu.dart';
+import 'package:bitetimenew/food_menu.dart';
 import 'package:bitetimenew/sheets/navigator.dart';
 import 'package:bitetimenew/ui/user/sheets/navbar.dart';
 import 'package:bitetimenew/models/buttons.dart';
@@ -220,7 +220,10 @@ class _CartScreenState extends State<CartScreen> {
           const SizedBox(height: 10),
           const Text("Looks like you haven't added anything yet.", style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 20),
-          button(label: 'Tap to Order!', destination: CustomNavBar()),
+          CustomButton(
+            label: 'Tap to Order!',
+            destination: CustomNavBar(),
+          )
         ],
       ),
     );

@@ -1,27 +1,26 @@
+import 'package:bitetimenew/ui/canteen/screens/canteen_dashboard_screen.dart';
+import 'package:bitetimenew/ui/canteen/screens/orders_screen.dart';
+import 'package:bitetimenew/ui/user/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
-import '../screens/home_screen.dart';
-import '../screens/cart_screen.dart';
-import '../screens/profile_screen.dart';
-import '../screens/timeline_screen.dart';
 
-class CustomNavBar extends StatefulWidget {
-  const CustomNavBar({super.key});
+class CanteenNavBar extends StatefulWidget {
+  const CanteenNavBar({super.key});
 
   @override
-  State<CustomNavBar> createState() => _CustomNavBarState();
+  State<CanteenNavBar> createState() => _CanteenNavBarState();
 }
 
-class _CustomNavBarState extends State<CustomNavBar> {
+class _CanteenNavBarState extends State<CanteenNavBar> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    HomeScreen(),
-    CartScreen(),
-    TimelineScreen(),
+    CanteenDashboard(),
+    OrdersScreen(),
     ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
+    print("Tapped on index: $index"); // ✅ Debugging
     setState(() {
       _selectedIndex = index;
     });
@@ -59,10 +58,9 @@ class _CustomNavBarState extends State<CustomNavBar> {
           elevation: 0,
           type: BottomNavigationBarType.fixed,
           items: [
-            _buildNavItem(Icons.home_outlined, Icons.home, 0, screenWidth),
-            _buildNavItem(Icons.shopping_cart_outlined, Icons.shopping_cart, 1, screenWidth),
-            _buildNavItem(Icons.assignment_outlined, Icons.assignment, 2, screenWidth),
-            _buildNavItem(Icons.person_outline, Icons.person, 3, screenWidth),
+            _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, 0, screenWidth),
+            _buildNavItem(Icons.receipt_long_outlined, Icons.receipt_long, 1, screenWidth),
+            _buildNavItem(Icons.person_outline, Icons.person, 2, screenWidth),
           ],
         ),
       ),

@@ -1,4 +1,4 @@
-import 'package:bitetimenew/ui/user/sheets/navbar.dart';
+import 'package:bitetimenew/ui/canteen/sheets/navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -7,14 +7,14 @@ import '../../../models/constants.dart';
 import '../../../models/titles.dart';
 import 'signup_screen.dart';
 
-class UserLoginScreen extends StatefulWidget {
-  const UserLoginScreen({super.key});
+class CanteenLoginScreen extends StatefulWidget {
+  const CanteenLoginScreen({super.key});
 
   @override
-  State<UserLoginScreen> createState() => _UserLoginScreenState();
+  State<CanteenLoginScreen> createState() => CanteenrLoginScreenState();
 }
 
-class _UserLoginScreenState extends State<UserLoginScreen> {
+class CanteenrLoginScreenState extends State<CanteenLoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
@@ -69,7 +69,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
               SizedBox(
                 width: screenWidth * 0.6,
                 child: Image.asset(
-                  "assets/user-login.png",
+                  "assets/canteen-login.png",
                   width: screenWidth * 0.7,
                 ),
               ),
@@ -97,7 +97,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                     /// ✅ **Email Field**
                     CustomTextField(
                       controller: _emailController,
-                      hintText: "Name / College Email ID",
+                      hintText: "Canteen mail / Number",
                       prefixIcon: Icons.email_outlined,
                     ),
 
@@ -117,7 +117,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                     /// ✅ **Login Button**
                     CustomButton(
                       label: "Login",
-                      destination: CustomNavBar(),
+                      destination: CanteenNavBar(),
                       labelColor: Colors.white,
                       width: double.infinity,
                       height: screenHeight * 0.07,
@@ -133,7 +133,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                       child: rowText(
                         text: "Don't have an account?",
                         buttonText: "Sign Up",
-                        destination: SignUpScreen(),
+                        destination: CanteenSignUpScreen(),
                       ),
                     ),
                   ],

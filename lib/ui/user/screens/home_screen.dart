@@ -19,9 +19,9 @@ class _HomeScreenState extends State<HomeScreen> {
     double sh = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Colors.grey[100], // ✅ Softer background
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(sh * 0.35), // ✅ Increased height to prevent overflow
+        preferredSize: Size.fromHeight(sh * 0.3),
         child: AppBar(
           automaticallyImplyLeading: false,
           elevation: 0,
@@ -31,73 +31,81 @@ class _HomeScreenState extends State<HomeScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 20),
               child: IconButton(
-                onPressed: (){
+                onPressed: () {
                   Navigation.navigateTo(context, NotficationScreen());
-                }, 
-                icon: Icon(
-                  Icons.notifications, color: Colors.black,
-                  size: sw * 0.08,
-                )
+                },
+                icon: Icon(Icons.notifications, color: Colors.black, size: sw * 0.08),
               ),
             ),
           ],
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              gradient: primaryColor,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(100),
-                bottomRight: Radius.circular(100),
-              ),
-            ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: sh * 0.07, horizontal: 20), // ✅ Reduced vertical padding
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SubTitles(title: 'Tap, Collect and Delight!'),
-                            SizedBox(height: sh * 0.005),
-                            Description(description: "Let's find your favourite food"),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: sw * 0.05),
-                      Image.asset('assets/fav.png', width: sw * 0.2), // ✅ Added back but with proper size
-                    ],
+          flexibleSpace: Stack(
+            children: [
+              // ✅ Gradient Background with Shadow
+              Container(
+                decoration: BoxDecoration(
+                  gradient: primaryColor,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(80),
+                    bottomRight: Radius.circular(80),
                   ),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12.withOpacity(0.3),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
               ),
-            ),
+              // ✅ Content inside AppBar
+              Positioned(
+                bottom: 15,
+                left: 20,
+                right: 20,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SubTitles(title: 'Tap, Collect and Delight!', fontSize: sw * 0.045),
+                          SizedBox(height: sh * 0.005),
+                          Description(description: "Let's find your favorite food"),
+                        ],
+                      ),
+                    ),
+                    Image.asset('assets/fav.png', width: sw * 0.2),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
 
       body: SingleChildScrollView(
-        child: Container(
-          margin: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Center(
           child: Column(
             children: [
-              SizedBox(height: sh * 0.03),
+              SizedBox(height: sh * 0.02),
               SubTitles(title: 'Dish Up Your Cravings!'),
               SizedBox(height: sh * 0.04),
+          
+              // ✅ Using Shops Component from Constants
               Shops(
-                Icon: Image.asset('assets/shop.png'), 
-                ShopName: SubTitles(title: 'Isthara', fontSize: sw * 0.04), 
+                Icon: Image.asset('assets/shop.png'),
+                ShopName: SubTitles(title: 'Isthara', fontSize: sw * 0.04),
                 Status: Image.asset('assets/open.png'),
                 destination: IstharaScreen(),
               ),
               SizedBox(height: sh * 0.05),
               Shops(
-                Icon: Image.asset('assets/shop.png'), 
-                ShopName: SubTitles(title: 'Brown\nFening', fontSize: sw * 0.04), 
-                Status: Image.asset('assets/close.png')
-              )
+                Icon: Image.asset('assets/shop.png'),
+                ShopName: SubTitles(title: 'Brown\nFening', fontSize: sw * 0.04),
+                Status: Image.asset('assets/close.png'),
+              ),
             ],
           ),
         ),

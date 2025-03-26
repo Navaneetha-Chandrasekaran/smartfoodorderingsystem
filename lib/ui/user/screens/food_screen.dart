@@ -2,11 +2,11 @@ import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../models/buttons.dart';
-import 'isthara/food.dart';
-import 'isthara/food_menu.dart';
+import '../../../food.dart';
+import '../../../food_menu.dart';
 import '../../../sheets/navigator.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class FoodScreen extends StatefulWidget {
   final Food food;
@@ -17,8 +17,8 @@ class FoodScreen extends StatefulWidget {
 }
 
 class _FoodScreenState extends State<FoodScreen> {
-  late List<bool> _selectedAddons; // ✅ Track selected checkboxes
-  Addon? selectedSpiceAddon; // ✅ Track the selected spice-level addon
+  late List<bool> _selectedAddons;
+  Addon? selectedSpiceAddon;
 
   @override
   void initState() {
@@ -26,11 +26,9 @@ class _FoodScreenState extends State<FoodScreen> {
     _selectedAddons = List.filled(widget.food.availableAddons.length, false);
   }
 
-  // ✅ Add to cart
+  /// ✅ Add to cart
   void addToCart(Food food) {
     final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-
-    // ✅ Get selected addons
     List<Addon> selectedAddons = [];
     for (int i = 0; i < widget.food.availableAddons.length; i++) {
       if (_selectedAddons[i]) {
@@ -38,7 +36,6 @@ class _FoodScreenState extends State<FoodScreen> {
       }
     }
 
-    // ✅ Add food + selected addons to cart
     foodMenu.addToCart(food, selectedAddons);
 
     // ✅ Show animated confirmation popup
@@ -51,106 +48,59 @@ class _FoodScreenState extends State<FoodScreen> {
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
+    double screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            /// ✅ **Food Image with Glassmorphism Effect**
             Stack(
               children: [
                 SizedBox(
                   width: screenWidth,
-                  height: screenWidth * 0.9,
-                  child: Image.asset(widget.food.image, fit: BoxFit.cover),
+                  height: screenHeight * 0.4,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(30),
+                      bottomRight: Radius.circular(30),
+                    ),
+                    child: Image.asset(widget.food.image, fit: BoxFit.cover),
+                  ),
                 ),
                 Positioned(
                   top: 40,
                   left: 16,
-                  child: InkWell(
-                    onTap: () => Navigation.goBack(context),
-                    child: Container(
-                      width: screenWidth * 0.1,
-                      height: screenWidth * 0.1,
-                      decoration: BoxDecoration(
-                        color: secondaryColor,
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Icon(
-                          Icons.arrow_back_ios,
-                          color: Colors.black,
-                          size: screenWidth * 0.05,
-                        ),
-                      ),
-                    ),
-                  ),
+                  child: _buildBackButton(),
                 ),
               ],
             ),
 
+            /// ✅ **Food Details**
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(height: screenWidth * 0.03),
                   FoodName(foodName: widget.food.name),
-
-                  SizedBox(height: screenWidth * 0.03),
-                  FoodPrice(foodPrice: widget.food.price.toString()),
-
+                  SizedBox(height: screenWidth * 0.01),
+                  FoodPrice(foodPrice: "₹${widget.food.price}"),
+                  SizedBox(height: screenWidth * 0.02),
                   FoodDescription(description: widget.food.description),
 
                   SizedBox(height: screenWidth * 0.05),
-
-                  Description(description: 'Addons'),
-                  Divider(color: Colors.grey),
-
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: widget.food.availableAddons.length,
-                    itemBuilder: (context, index) {
-                      final addon = widget.food.availableAddons[index];
-
-                      return CheckboxListTile(
-                        title: Text(addon.name),
-                        value: _selectedAddons[index],
-                        onChanged: (bool? value) {
-                          setState(() {
-                            if (addon.spiceLevel != SpiceLevel.none) {
-                              // ✅ If addon is a spice level, ensure only one is selected
-                              if (value == true) {
-                                // Uncheck previous spice addon
-                                if (selectedSpiceAddon != null) {
-                                  int previousIndex = widget.food.availableAddons.indexOf(selectedSpiceAddon!);
-                                  if (previousIndex != -1) {
-                                    _selectedAddons[previousIndex] = false;
-                                  }
-                                }
-                                // Select new spice-level addon
-                                selectedSpiceAddon = addon;
-                              } else {
-                                // Remove spice-level addon
-                                selectedSpiceAddon = null;
-                              }
-                            }
-
-                            _selectedAddons[index] = value ?? false;
-                          });
-                        },
-                      );
-                    },
-                  ),
+                  _buildAddonSection(),
 
                   SizedBox(height: 20),
 
+                  /// ✅ **Add to Cart Button with Gradient & Shadow**
                   Center(
                     child: CartButton(
                       name: 'Add to cart',
-                      onTap: () => addToCart(widget.food)),
+                      onTap: () => addToCart(widget.food),
+                    ),
                   ),
                 ],
               ),
@@ -160,9 +110,80 @@ class _FoodScreenState extends State<FoodScreen> {
       ),
     );
   }
+
+  /// ✅ **Back Button with Glass Effect**
+  Widget _buildBackButton() {
+    return InkWell(
+      onTap: () => Navigation.goBack(context),
+      child: Container(
+        width: 45,
+        height: 45,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(50),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, spreadRadius: 2),
+          ],
+        ),
+        child: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
+      ),
+    );
+  }
+
+  /// ✅ **Addons Section with Chip-Style UI**
+  Widget _buildAddonSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Description(description: 'Addons'),
+        Divider(color: Colors.grey[400]),
+
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: widget.food.availableAddons.asMap().entries.map((entry) {
+            int index = entry.key;
+            Addon addon = entry.value;
+
+            return ChoiceChip(
+              label: Text(
+                addon.name,
+                style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              selected: _selectedAddons[index],
+              onSelected: (bool selected) {
+                setState(() {
+                  if (addon.spiceLevel != SpiceLevel.none) {
+                    if (selected) {
+                      // Unselect previous spice addon
+                      if (selectedSpiceAddon != null) {
+                        int prevIndex = widget.food.availableAddons.indexOf(selectedSpiceAddon!);
+                        if (prevIndex != -1) {
+                          _selectedAddons[prevIndex] = false;
+                        }
+                      }
+                      selectedSpiceAddon = addon;
+                    } else {
+                      selectedSpiceAddon = null;
+                    }
+                  }
+                  _selectedAddons[index] = selected;
+                });
+              },
+              selectedColor: Colors.green.withOpacity(0.2),
+              backgroundColor: Colors.grey[300],
+              labelStyle: TextStyle(
+                color: _selectedAddons[index] ? Colors.green[900] : Colors.black87,
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
 }
 
-// ✅ Animated Popup for "Added to Cart"
+/// ✅ **Animated "Added to Cart" Popup**
 class AddedToCartPopup extends StatelessWidget {
   final Food food;
 
@@ -173,7 +194,7 @@ class AddedToCartPopup extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       child: ScaleTransition(
-        scale: Tween(begin: 0.5, end: 1.0).animate(
+        scale: Tween(begin: 0.7, end: 1.0).animate(
           CurvedAnimation(parent: ModalRoute.of(context)!.animation!, curve: Curves.easeOutBack),
         ),
         child: Container(
@@ -181,17 +202,29 @@ class AddedToCartPopup extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, spreadRadius: 1),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.check_circle, color: Colors.green, size: 60),
               SizedBox(height: 10),
-              Text('${food.name} added to cart!', style: TextStyle(fontSize: 18)),
+              Text(
+                '${food.name} added to cart!',
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
               SizedBox(height: 10),
-              TextButton(
+              ElevatedButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('OK'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[700],
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('OK'),
               ),
             ],
           ),

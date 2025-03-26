@@ -6,8 +6,8 @@ import 'package:bitetimenew/models/drawer.dart';
 import 'package:bitetimenew/models/sliver_appbar.dart';
 import 'package:bitetimenew/models/tab_bar.dart';
 import 'package:bitetimenew/models/titles.dart';
-import 'package:bitetimenew/ui/user/screens/isthara/food.dart';
-import 'package:bitetimenew/ui/user/screens/isthara/food_menu.dart';
+import 'package:bitetimenew/food.dart';
+import 'package:bitetimenew/food_menu.dart';
 
 import '../../../../sheets/navigator.dart';
 
@@ -20,7 +20,8 @@ class IstharaScreen extends StatefulWidget {
 
 class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _showVegOnly = false; // ✅ Tracks filter state
+  bool _showVegOnly = false;  // Toggle for Veg items
+  bool _showNonVegOnly = false;  // Toggle for Non-Veg items
 
   @override
   void initState() {
@@ -34,11 +35,14 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
     super.dispose();
   }
 
-  // ✅ Filters menu by category
+  // ✅ Filters menu by category and veg/non-veg toggles
   List<Food> _filterMenuByCategory(FoodCategory category, List<Food> fullMenu) {
     return fullMenu
         .where((food) => food.category == category)
-        .where((food) => !_showVegOnly || food.isVeg) // ✅ Apply Veg filter
+        .where((food) =>
+            (!_showVegOnly && !_showNonVegOnly) || // Show all food if both filters are off
+            (_showVegOnly && food.isVeg) ||  // Show only veg items if the veg toggle is on
+            (_showNonVegOnly && !food.isVeg)) // Show only non-veg items if the non-veg toggle is on
         .toList();
   }
 
@@ -57,14 +61,29 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                   final food = categoryMenu[index];
 
                   return FoodTile(
-                    food: food, 
-                    onTap: () => Navigation.navigateTo(context, FoodScreen(food: food)), 
+                    food: food,
+                    onTap: () => Navigation.navigateTo(context, FoodScreen(food: food)),
                     availableItems: food.availableQuantity,
                   );
                 },
               ),
             );
     }).toList();
+  }
+
+  // Toggling Veg and Non-Veg states
+  void _toggleVeg() {
+    setState(() {
+      _showVegOnly = !_showVegOnly;
+      if (_showVegOnly) _showNonVegOnly = false; // Ensure Non-Veg toggle is off when Veg is on
+    });
+  }
+
+  void _toggleNonVeg() {
+    setState(() {
+      _showNonVegOnly = !_showNonVegOnly;
+      if (_showNonVegOnly) _showVegOnly = false; // Ensure Veg toggle is off when Non-Veg is on
+    });
   }
 
   @override
@@ -78,7 +97,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
               duration: const Duration(milliseconds: 400),
               transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
               child: NestedScrollView(
-                key: ValueKey<bool>(_showVegOnly), // ✅ Ensures animation when toggling
+                key: ValueKey<bool>(_showVegOnly || _showNonVegOnly),  // Ensures animation when toggling
                 headerSliverBuilder: (context, innerBoxIsScrolled) => [
                   MySliverAppBar(
                     child: const Text(''),
@@ -87,18 +106,17 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                       preferredSize: const Size.fromHeight(40),
                       child: MyTabBar(tabController: _tabController),
                     ),
-                    showVegOnly: _showVegOnly, // ✅ Pass filter state
-                    onToggle: () {
-                      setState(() {
-                        _showVegOnly = !_showVegOnly;
-                      });
-                    },
+                    // Passing the toggle state to the SliverAppBar
+                    showVegOnly: _showVegOnly,
+                    showNonVegOnly: _showNonVegOnly,
+                    onToggle: _toggleVeg,
+                    onNonVegToggle: _toggleNonVeg,
                   ),
                 ],
                 body: Consumer<FoodMenu>(
                   builder: (context, foodMenu, child) => TabBarView(
                     controller: _tabController,
-                    children: getFoodInCategory(foodMenu.menu),
+                    children: getFoodInCategory(foodMenu.menu), // Pass the filtered menu
                   ),
                 ),
               ),

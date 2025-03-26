@@ -1,7 +1,7 @@
 import 'package:bitetimenew/models/constants.dart';
 import 'package:bitetimenew/models/titles.dart';
 import 'package:flutter/material.dart';
-import '../ui/user/screens/isthara/food.dart';
+import '../food.dart';
 
 class FoodTile extends StatelessWidget {
   final Food food;
@@ -10,13 +10,14 @@ class FoodTile extends StatelessWidget {
   const FoodTile({
     super.key,
     required this.food,
-    required this.onTap, 
-    required int availableItems,
+    required this.onTap, required int availableItems,
   });
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
+    double imageSize = screenWidth * 0.3;  // Set equal size for the food images
+
     return Column(
       children: [
         GestureDetector(
@@ -39,10 +40,15 @@ class FoodTile extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  // ✅ Food Image
+                  // ✅ Food Image with equal size
                   ClipRRect(
                     borderRadius: BorderRadius.circular(15),
-                    child: Image.asset(food.image, width: screenWidth * 0.3),
+                    child: Image.asset(
+                      food.image,
+                      width: imageSize,
+                      height: imageSize,  // Make sure the height is equal to the width
+                      fit: BoxFit.cover,   // Ensure the image fits correctly
+                    ),
                   ),
                   SizedBox(width: screenWidth * 0.07),
 

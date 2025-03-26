@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../ui/user/screens/timeline_screen.dart';
-import '../ui/user/screens/isthara/food.dart';
+import '../food.dart';
 import 'constants.dart';
 import 'titles.dart';
 
@@ -46,25 +46,33 @@ class CartButton extends StatelessWidget {
 }
 
 
-class button extends StatelessWidget {
-  const button({
+class CustomButton extends StatelessWidget {
+  final String label;
+  final Widget? destination;
+  final double? width;
+  final double? height;
+  final VoidCallback? onPressed;
+  final List<Color>? gradientColors; // ✅ Custom Gradient Colors
+  final Color? labelColor;
+  final IconData? icon;
+  final bool iconRight;
+  final bool hasBorder; // ✅ Optional Border
+  final Color? borderColor; // ✅ Custom Border Color
+
+  const CustomButton({
     super.key,
     required this.label,
     this.destination,
     this.width,
     this.height,
     this.onPressed,
-    this.bg,
-    this.labelColor, // New parameter for text color
+    this.gradientColors, // ✅ Allows custom gradients
+    this.labelColor,
+    this.icon,
+    this.iconRight = true,
+    this.hasBorder = false, // ✅ Default: No Border
+    this.borderColor,
   });
-
-  final String label;
-  final Widget? destination;
-  final double? width;
-  final double? height;
-  final VoidCallback? onPressed;
-  final Color? bg;
-  final Color? labelColor; // Allows setting text color dynamically
 
   @override
   Widget build(BuildContext context) {
@@ -90,21 +98,41 @@ class button extends StatelessWidget {
           width: width ?? screenWidth * 0.75,
           height: height ?? screenHeight * 0.06,
           decoration: BoxDecoration(
-            color: bg ?? Colors.transparent,
-            gradient: bg == null
-                ? const LinearGradient(colors: [Colors.blue, Colors.green])
-                : null,
-            borderRadius: BorderRadius.circular(50),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: labelColor ?? Colors.white, // Default to white if not provided
-              ),
+            gradient: LinearGradient(
+              colors: gradientColors ?? [Color(0xFF40CF58), Color(0xFF4AFD69)], // ✅ Default Gradient
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
+            borderRadius: BorderRadius.circular(50),
+            border: hasBorder ? Border.all(color: borderColor ?? Colors.white, width: 2) : null, // ✅ Optional Border
+            boxShadow: [
+              BoxShadow(
+                color: (gradientColors ?? [Colors.green, Colors.blue])[0].withOpacity(0.3),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              /// ✅ **Centered Button Text**
+              Center(
+                child: Titles(title: label, color: Colors.white)
+              ),
+
+              /// ✅ **Optional Icon (Right or Left)**
+              if (icon != null)
+                Positioned(
+                  right: iconRight ? 15 : null,
+                  left: iconRight ? null : 15,
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white,
+                    child: Icon(icon, color: gradientColors?[0] ?? Colors.green),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
