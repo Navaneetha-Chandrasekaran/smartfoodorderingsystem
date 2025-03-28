@@ -1,10 +1,12 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
 import '../../../models/titles.dart';
 import 'login_screen.dart';
-import '../../../sheets/otp_screen.dart';
+// import '../../../sheets/otp_screen.dart';
 
 class CanteenSignUpScreen extends StatefulWidget {
   const CanteenSignUpScreen({super.key});
@@ -129,7 +131,7 @@ class _CanteenSignUpScreenState extends State<CanteenSignUpScreen> {
                     /// ✅ **Register Button**
                     CustomButton(
                       label: "Register",
-                      destination: OtpScreen(),
+                      // destination: OtpScreen(),
                       labelColor: Colors.white,
                       width: double.infinity,
                       height: screenHeight * 0.07,

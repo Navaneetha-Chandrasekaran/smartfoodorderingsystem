@@ -1,10 +1,11 @@
+import 'package:bitetimenew/services/auth/signup_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
 import '../../../models/titles.dart';
 import 'login_screen.dart';
-import '../../../sheets/otp_screen.dart';
+import 'otp_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -14,13 +15,25 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  final SignUpController _controller = SignUpController();
+  final SignupAuth _signupAuth = SignupAuth(); // ✅ Initialize AuthService
+
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _controller.disposeControllers();
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -34,6 +47,64 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() {
       _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
     });
+  }
+
+  /// ✅ **Handle Signup**
+  Future<void> _handleSignup() async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  final name = _nameController.text.trim();
+  final email = _emailController.text.trim();
+  final phone = _phoneController.text.trim();
+  final password = _passwordController.text.trim();
+  final confirmPassword = _confirmPasswordController.text.trim();
+
+  if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+    _showSnackBar("All fields are required");
+    setState(() {
+      _isLoading = false;
+    });
+    return;
+  }
+
+  if (!email.endsWith('@shanmugha.edu.in')) {
+    _showSnackBar("Email must be from @shanmugha.edu.in domain");
+    setState(() {
+      _isLoading = false;
+    });
+    return;
+  }
+
+  /// ❌ **Wrong: `signup.registerStudent`**
+  /// ✅ **Correct: `_signupAuth.registerStudent`**
+  final response = await _signupAuth.registerStudent(name, email, phone, password, confirmPassword);
+
+  if (response['success']) {
+    _showSnackBar("Signup Successful! OTP sent to email");
+
+    /// ✅ **Navigate to OTP Verification Screen**
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OtpScreen(email: response['email']),
+      ),
+    );
+  } else {
+    _showSnackBar(response['message']); // Show error message
+  }
+
+  setState(() {
+    _isLoading = false;
+  });
+}
+
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -74,7 +145,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
               SizedBox(height: screenHeight * 0.03),
 
-              /// ✅ **Sign Up Form with Button & Navigation**
+              /// ✅ **Sign Up Form**
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
                 margin: const EdgeInsets.symmetric(horizontal: 30),
@@ -92,23 +163,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    CustomTextField(controller: _nameController, hintText: "Full Name", prefixIcon: Icons.person),
+                    CustomTextField(controller: _emailController, hintText: "College Mail ID", prefixIcon: Icons.email),
+                    CustomTextField(controller: _phoneController, hintText: "Phone Number", prefixIcon: Icons.call),
                     CustomTextField(
-                      controller: _controller.nameController,
-                      hintText: "Full Name",
-                      prefixIcon: Icons.person,
-                    ),
-                    CustomTextField(
-                      controller: _controller.emailController,
-                      hintText: "College Mail ID",
-                      prefixIcon: Icons.email,
-                    ),
-                    CustomTextField(
-                      controller: _controller.phoneController,
-                      hintText: "Phone Number",
-                      prefixIcon: Icons.call,
-                    ),
-                    CustomTextField(
-                      controller: _controller.passwordController,
+                      controller: _passwordController,
                       hintText: "Password",
                       prefixIcon: Icons.lock,
                       isPassword: true,
@@ -116,7 +175,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       togglePasswordVisibility: togglePasswordVisibility,
                     ),
                     CustomTextField(
-                      controller: _controller.confirmPasswordController,
+                      controller: _confirmPasswordController,
                       hintText: "Confirm Password",
                       prefixIcon: Icons.lock,
                       isPassword: true,
@@ -127,16 +186,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     SizedBox(height: screenHeight * 0.02),
 
                     /// ✅ **Register Button**
-                    CustomButton(
-                      label: "Register",
-                      destination: OtpScreen(),
-                      labelColor: Colors.white,
-                      width: double.infinity,
-                      height: screenHeight * 0.07,
-                      icon: Icons.arrow_forward, // ✅ Icon on the right
-                    ),
-
-
+                    _isLoading
+                        ? Center(child: CircularProgressIndicator()) // ✅ Show loading
+                        : CustomButton(
+                            label: "Register",
+                            onPressed: _handleSignup, // ✅ Call signup function
+                            labelColor: Colors.white,
+                            width: double.infinity,
+                            height: screenHeight * 0.07,
+                            icon: Icons.arrow_forward,
+                          ),
 
                     SizedBox(height: screenHeight * 0.02),
 
@@ -151,7 +210,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ],
                 ),
               ),
-              SizedBox(height: screenHeight * 0.07)
+              SizedBox(height: screenHeight * 0.07),
             ],
           ),
         ),

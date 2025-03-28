@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+// ignore_for_file: deprecated_member_use, avoid_print
 
+import 'package:bitetimenew/ui/canteen/screens/stock_screen.dart';
+import 'package:flutter/material.dart';
 import '../screens/canteen_dashboard_screen.dart';
 import '../screens/orders_screen.dart';
 import '../screens/profile_screen.dart';
@@ -16,6 +18,7 @@ class _CanteenNavBarState extends State<CanteenNavBar> {
 
   final List<Widget> _screens = [
     CanteenDashboard(),
+    StockManagementScreen(), // ✅ Stock Screen Added
     OrdersScreen(),
     ProfileScreen(),
   ];
@@ -60,8 +63,9 @@ class _CanteenNavBarState extends State<CanteenNavBar> {
           type: BottomNavigationBarType.fixed,
           items: [
             _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, 0, screenWidth),
-            _buildNavItem(Icons.receipt_long_outlined, Icons.receipt_long, 1, screenWidth),
-            _buildNavItem(Icons.person_outline, Icons.person, 2, screenWidth),
+            _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, 1, screenWidth), // ✅ Stock Icon Added
+            _buildNavItem(Icons.receipt_long_outlined, Icons.receipt_long, 2, screenWidth),
+            _buildNavItem(Icons.person_outline, Icons.person, 3, screenWidth),
           ],
         ),
       ),

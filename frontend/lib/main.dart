@@ -1,11 +1,12 @@
+import 'package:bitetimenew/ui/canteen/sheets/navbar.dart';
+import 'package:bitetimenew/ui/user/screens/onboard_screen.dart';
+import 'package:bitetimenew/ui/user/sheets/navbar.dart';
+import 'package:bitetimenew/userselection_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
 import 'food_menu.dart';
 import 'theme/theme_provider.dart';
-import 'ui/user/screens/onboard_screen.dart';
-import 'userselection_screen.dart';
-
 late SharedPreferences prefs;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // ✅ Ensures Flutter is ready before running

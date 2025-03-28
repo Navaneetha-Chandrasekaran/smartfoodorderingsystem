@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import '../screens/home_screen.dart';
 import '../screens/cart_screen.dart';

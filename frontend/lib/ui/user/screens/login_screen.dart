@@ -1,9 +1,12 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
+import '../../../models/custom_dialog.dart';
 import '../../../models/titles.dart';
+import '../../../services/auth/login_auth.dart';
 import '../sheets/navbar.dart';
 import 'signup_screen.dart';
 
@@ -18,6 +21,8 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -31,6 +36,93 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       _isPasswordVisible = !_isPasswordVisible;
     });
   }
+
+  /// ✅ **Handle Login**
+  Future<void> _handleLogin() async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  final email = _emailController.text.trim();
+  final password = _passwordController.text.trim();
+
+  if (email.isEmpty || password.isEmpty) {
+    _showErrorDialog("Missing Fields", "⚠️ Please enter email and password.");
+    setState(() {
+      _isLoading = false;
+    });
+    return;
+  }
+
+  try {
+    print("⏳ Sending login request..."); // Debugging log
+    final response = await _authService.loginUser(email, password);
+    print("✅ API Response: $response"); // Debugging log
+
+    if (response['success']) {
+      print("🎉 Login Successful");
+
+      // ✅ Delay navigation to avoid UI issues
+      Future.delayed(Duration(milliseconds: 500), () {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => CustomNavBar()),
+          );
+        }
+      });
+
+      _showSuccessDialog("Login Successful", "✅ Welcome back!");
+    } else {
+      print("❌ Login Failed: ${response['message']}");
+      _showErrorDialog("Login Failed", response['message']);
+    }
+  } catch (e) {
+    print("🚨 Error during login: $e");
+    _showErrorDialog("Error", "🚨 Login failed: $e");
+  }
+
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
+
+/// ✅ **Show Error Dialog**
+void _showErrorDialog(String title, String message) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("OK"),
+        ),
+      ],
+    ),
+  );
+}
+
+/// ✅ **Show Success Dialog**
+void _showSuccessDialog(String title, String message) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("OK"),
+        ),
+      ],
+    ),
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +189,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                     /// ✅ **Email Field**
                     CustomTextField(
                       controller: _emailController,
-                      hintText: "Name / College Email ID",
+                      hintText: "Email",
                       prefixIcon: Icons.email_outlined,
                     ),
 
@@ -114,17 +206,16 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                     SizedBox(height: screenHeight * 0.015),
 
                     /// ✅ **Login Button**
-                    /// ✅ **Login Button**
-                    CustomButton(
-                      label: "Login",
-                      destination: CustomNavBar(),
-                      labelColor: Colors.white,
-                      width: double.infinity,
-                      height: screenHeight * 0.07,
-                      icon: Icons.arrow_forward, // ✅ Icon on the right
-                    ),
-
-
+                    _isLoading
+                        ? const Center(child: CircularProgressIndicator()) // ✅ Show loader
+                        : CustomButton(
+                            label: "Login",
+                            onPressed: _handleLogin, // ✅ Call login function
+                            labelColor: Colors.white,
+                            width: double.infinity,
+                            height: screenHeight * 0.07,
+                            icon: Icons.arrow_forward,
+                          ),
 
                     SizedBox(height: screenHeight * 0.03),
 

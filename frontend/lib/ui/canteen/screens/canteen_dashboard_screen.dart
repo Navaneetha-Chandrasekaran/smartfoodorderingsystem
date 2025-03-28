@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -239,7 +241,7 @@ class _CanteenDashboardState extends State<CanteenDashboard> {
       if (step < 4) {
         foodMenu.nextOrderStep(order);
       } else {
-        foodMenu.completeOrder(order, orderNumber); // ✅ Pass order number to completed orders
+        _verifyOTP(order, foodMenu, orderNumber);
       }
     },
     style: ElevatedButton.styleFrom(
@@ -252,7 +254,59 @@ class _CanteenDashboardState extends State<CanteenDashboard> {
       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
     ),
   );
-  }
+}
+
+/// ✅ **OTP Verification Dialog**
+void _verifyOTP(CartItem order, FoodMenu foodMenu, int orderNumber) {
+  TextEditingController otpController = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Verify OTP"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text("Enter the OTP received by the customer."),
+          const SizedBox(height: 10),
+          TextField(
+            controller: otpController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: "Enter OTP",
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (otpController.text == order.otp) {
+              // ✅ OTP matches, complete order
+              foodMenu.completeOrder(order, orderNumber);
+              Navigator.pop(context); // Close dialog
+            } else {
+              // ❌ OTP incorrect, show error
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Incorrect OTP! Please try again."),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          child: const Text("Verify"),
+        ),
+      ],
+    ),
+  );
+}
+
 
 }
 

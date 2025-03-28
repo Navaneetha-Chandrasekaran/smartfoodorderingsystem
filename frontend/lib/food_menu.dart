@@ -215,6 +215,17 @@ class FoodMenu extends ChangeNotifier {
   // ✅ Move the order to the next step
   void nextOrderStep(CartItem order) {
     if (_orderSteps.containsKey(order)) {
+      int currentStep = _orderSteps[order]!;
+
+      // ✅ Only reduce stock when confirming the order (Step 1 → Step 2)
+      if(currentStep == 1){
+        if(order.food.availableQuantity >= order.quantity){
+          order.food.availableQuantity -= order.quantity;
+        }
+        else{
+          order.food.availableQuantity = 0; // Prevents negative values
+        }
+      }
       _orderSteps[order] = (_orderSteps[order]! + 1).clamp(1, 4);
       notifyListeners();
     }
@@ -226,8 +237,22 @@ class FoodMenu extends ChangeNotifier {
       _upcomingOrders.remove(order);
       _completedOrders.add(order);
       _orderSteps.remove(order);
+
+      // Deduct stock based on order quantity:
+      order.food.availableQuantity -= order.quantity;
+
+      //Prevents negative stock values:
+      if(order.food.availableQuantity < 0){
+        order.food.availableQuantity = 0;
+      }
       notifyListeners();
     }
+  }
+
+  // ✅ Update Stocks
+  void updateStock(Food food, int newQuantity) {
+    food.availableQuantity = newQuantity;
+    notifyListeners();
   }
 
   // ✅ Clear all orders
