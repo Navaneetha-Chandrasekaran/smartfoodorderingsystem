@@ -2,13 +2,8 @@ const express = require('express');
 const router = express.Router();
 const cartController = require('../controllers/cartController');
 
-router.post('/cart/add', cartController.addToCart);
-
-router.get('/cart/:user_id', cartController.getCart);
-
-router.delete('/cart/remove/:cart_id', cartController.removeItem);
-router.put('/cart/update', cartController.updateQuantity);
-router.put('/cart/update-delivery-payment', cartController.updateDeliveryPayment);
-
-
+router.post("/add", cartController.addToCart);
+router.get("/view/:user_id", cartController.getCartItems);
+router.delete("/remove/:cart_id", cartController.removeCartItem);
+router.delete("/clear/:user_id", cartController.clearCart);
 module.exports = router;

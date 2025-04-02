@@ -50,7 +50,7 @@ const registerUser = (table, name, email, phone, password, confirmPassword, res)
             if (err) return res.status(500).json({ message: 'Email already exists' });
 
             sendOTP(email, otp)
-                .then(() => res.json({ message: 'Registration successful. OTP sent to email.', email }))
+                .then(()=> res.json({ message: 'Registration successful. OTP sent to email.', email }))
                 .catch(() => res.status(500).json({ message: 'Failed to send OTP' }));
                 
                       
