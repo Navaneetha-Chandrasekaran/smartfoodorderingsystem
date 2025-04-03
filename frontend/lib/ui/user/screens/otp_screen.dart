@@ -11,7 +11,6 @@ import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
 import '../../../models/titles.dart';
 import '../../../services/auth/otp_auth.dart';
-import 'reset_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email; // ✅ Store Email for Verification

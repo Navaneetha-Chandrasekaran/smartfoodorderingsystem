@@ -46,6 +46,8 @@ class Timeline extends StatelessWidget {
         endChild: TimelineAnimation(
           isPast: isPast,
           child: eventCard,
+          orderNumber: '',
+          animatedOrders: {},
         ),
       ),
     );

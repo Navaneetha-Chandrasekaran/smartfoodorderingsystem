@@ -3,6 +3,40 @@ import 'package:collection/collection.dart';
 import 'food.dart';
 import 'models/cart_item.dart';
 
+class Order {
+  final int orderNumber;
+  final List<CartItem> items;
+  final TimeOfDay? pickupTime;
+  final DateTime orderPlacedTime;
+  final Duration preparationTime;
+
+  int step;
+  bool isCancelled;
+  bool pickupTimeExpired;
+
+  Order({
+    required this.orderNumber,
+    required this.items,
+    this.pickupTime,
+    required this.orderPlacedTime,
+    this.preparationTime = const Duration(minutes: 10),
+
+    this.step = 1,                // Default to step 1
+    this.isCancelled = false,     // Default to not cancelled
+    this.pickupTimeExpired = false, // Default to not expired
+  });
+  
+  /// ✅ Compute remaining time dynamically
+  int get remainingSeconds {
+    if (isCancelled || pickupTimeExpired) return 0; // ✅ Ensure expired/cancelled orders show 0 time left
+
+    final expiryTime = orderPlacedTime.add(preparationTime);
+    final difference = expiryTime.difference(DateTime.now()).inSeconds;
+    return difference > 0 ? difference : 0;
+  }
+}
+
+
 class FoodMenu extends ChangeNotifier {
   final List<Food> _menu = [
     // ✅ Breakfast menu:
@@ -97,7 +131,9 @@ class FoodMenu extends ChangeNotifier {
     ),
   ];
 
+
   final List<CartItem> _cart = [];
+  final List<Order> _orders = [];
   List<CartItem> _lastOrderedItems = [];
   List<CartItem> _upcomingOrders = [];
   final List<CartItem> _completedOrders = [];
@@ -114,11 +150,42 @@ class FoodMenu extends ChangeNotifier {
   List<CartItem> get completedOrders => _completedOrders;
   bool get isOrderCancelled => _isOrderCancelled;
 
+  // ✅ Returns a list of all active (non-cancelled) orders
+  List<Order> getActiveOrders() {
+    return _orders.where((order) => order.isCancelled != true).toList();
+  }
+
+  // ✅ Returns the list of ordered items from the most recent order
+//   List<CartItem> getOrderItems(String orderNumber) {
+//   int? num = int.tryParse(orderNumber);
+//   if (num == null) return []; // ✅ Return empty list for invalid input
+//   return _orders.firstWhereOrNull((order) => order.orderNumber == num)?.items ?? [];
+// }
+  List<CartItem> getOrderItems(int orderNumber) {
+    return _orders.firstWhereOrNull((order) => order.orderNumber == orderNumber)?.items ?? [];
+  }
+
+
+
+
+
+
+
+  final Map<int, int> _orderProgress = {};
+
+  int getOrderProgress(int orderNumber) {
+    return _orderProgress[orderNumber] ?? 0;
+  }
+
+  void updateOrderProgress(int orderNumber, int step){
+    _orderProgress[orderNumber] = step;
+    notifyListeners();
+  }
+
+
   // ✅ Add to Cart (Decreases Available Stock)
   void addToCart(Food food, List<Addon> selectedAddons) {
     if (food.availableQuantity > 0) {
-      food.availableQuantity--;
-
       CartItem? cartItem = _cart.firstWhereOrNull((item) =>
           item.food == food && _areAddonsEqual(item.selectedAddons, selectedAddons));
 
@@ -127,19 +194,34 @@ class FoodMenu extends ChangeNotifier {
       } else {
         _cart.add(CartItem(food: food, selectedAddons: selectedAddons, quantity: 1));
       }
+
+      food.availableQuantity--; // ✅ Reduce stock **after** adding to cart
       notifyListeners();
     }
   }
 
-  // ✅ Place Order (Saves Last Ordered Items & Clears Cart)
-  void placeOrder() {
+
+  // ✅ Place Order (Saves Last Ordered Items & Clears Cart), Separate order:
+  void placeOrder(TimeOfDay? selectedTime) {
+    // if (_cart.isNotEmpty) {
+    //   _lastOrderedItems = List.from(_cart);
+    //   _upcomingOrders.addAll(_cart);
+    //   _cart.clear();
+    //   notifyListeners();
+    // }
     if (_cart.isNotEmpty) {
-      _lastOrderedItems = List.from(_cart);
-      _upcomingOrders.addAll(_cart);
-      _cart.clear();
-      notifyListeners();
-    }
+    Order newOrder = Order(
+      orderNumber: _nextOrderNumber++,
+      items: List.from(_cart),
+      pickupTime: selectedTime,
+      orderPlacedTime: DateTime.now(),
+    );
+
+    _orders.add(newOrder);
+    _cart.clear();
+    notifyListeners(); // ✅ Ensure UI updates after order placement
   }
+}
 
   // ✅ Remove from Cart (Restores Stock)
   void removeFromCart(CartItem cartItem) {
@@ -173,13 +255,20 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ✅ Clear last ordered items when order is canceled
-  void cancelOrder() {
-    _lastOrderedItems.clear();
-    _upcomingOrders.clear();
-    _isOrderCancelled = true;
-    notifyListeners();
+  // ✅ Cancel a Specific Order (Restores Stock)
+void cancelOrder(int orderNumber) {
+  Order? order = _orders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
+  if (order == null || order.isCancelled) return;
+
+  for (var item in order.items) {
+    item.food.availableQuantity += item.quantity;
   }
+
+  order.isCancelled = true;
+  order.step = 0; // ✅ Reset step progress
+  notifyListeners();
+}
+
 
   // ✅ Reset order cancellation status
   void resetOrderStatus() {
@@ -212,42 +301,61 @@ class FoodMenu extends ChangeNotifier {
     return _orderNumbers[order] ?? 0;
   }
 
-  // ✅ Move the order to the next step
-  void nextOrderStep(CartItem order) {
-    if (_orderSteps.containsKey(order)) {
-      int currentStep = _orderSteps[order]!;
+  // ✅ Move Order to Next Step
+  void nextOrderStep(int orderNumber) {
+    Order? order = _orders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
+    if (order == null || order.step >= 4) return;
 
-      // ✅ Only reduce stock when confirming the order (Step 1 → Step 2)
-      if(currentStep == 1){
-        if(order.food.availableQuantity >= order.quantity){
-          order.food.availableQuantity -= order.quantity;
-        }
-        else{
-          order.food.availableQuantity = 0; // Prevents negative values
-        }
+    if (order.step == 1 && !_orderProgress.containsKey(orderNumber)) {
+      for (var item in order.items) {
+        item.food.availableQuantity = (item.food.availableQuantity - item.quantity).clamp(0, item.food.availableQuantity);
       }
-      _orderSteps[order] = (_orderSteps[order]! + 1).clamp(1, 4);
-      notifyListeners();
+      _orderProgress[orderNumber] = 1; // ✅ Prevent duplicate stock reduction
     }
+
+    order.step++;
+    notifyListeners();
   }
+
+
+
+
+
+// void updateOrderTime(int orderNumber, int remainingSeconds) {
+//   final order = _orders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
+//   if (order != null) {
+//     order.remainingSeconds = remainingSeconds < 0 ? 0 : remainingSeconds;
+//     notifyListeners();
+
+//     // ✅ Automatically mark order as complete if time expires
+//     if (order.remainingSeconds == 0) {
+//       completeOrder(orderNumber);
+//     }
+//   }
+// }
+
+
+
 
   // ✅ Move order to "Completed Orders"
-  void completeOrder(CartItem order, [int? orderNumber]) {
-    if (_upcomingOrders.contains(order)) {
-      _upcomingOrders.remove(order);
-      _completedOrders.add(order);
-      _orderSteps.remove(order);
+final List<Order> _completedOrdersList = [];
 
-      // Deduct stock based on order quantity:
-      order.food.availableQuantity -= order.quantity;
-
-      //Prevents negative stock values:
-      if(order.food.availableQuantity < 0){
-        order.food.availableQuantity = 0;
-      }
-      notifyListeners();
-    }
+void completeOrder(int orderNumber) {
+  Order? order = _orders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
+  if (order != null) {
+    _orders.remove(order);
+    _completedOrdersList.add(order); // ✅ Store full order instead of just items
+    notifyListeners();
   }
+}
+
+
+// ✅ Get completed orders
+List<Order> getCompletedOrders() {
+  return _completedOrdersList;
+}
+
+
 
   // ✅ Update Stocks
   void updateStock(Food food, int newQuantity) {

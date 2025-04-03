@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:math';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../food_menu.dart';
@@ -239,7 +240,7 @@ class _CanteenDashboardState extends State<CanteenDashboard> {
   return ElevatedButton(
     onPressed: () {
       if (step < 4) {
-        foodMenu.nextOrderStep(order);
+        foodMenu.nextOrderStep(orderNumber);
       } else {
         _verifyOTP(order, foodMenu, orderNumber);
       }
@@ -259,6 +260,9 @@ class _CanteenDashboardState extends State<CanteenDashboard> {
 /// ✅ **OTP Verification Dialog**
 void _verifyOTP(CartItem order, FoodMenu foodMenu, int orderNumber) {
   TextEditingController otpController = TextEditingController();
+  Order? order = foodMenu.getActiveOrders().firstWhereOrNull((o) => o.orderNumber == orderNumber);
+
+  if(order == null) return;
 
   showDialog(
     context: context,
@@ -286,9 +290,9 @@ void _verifyOTP(CartItem order, FoodMenu foodMenu, int orderNumber) {
         ),
         ElevatedButton(
           onPressed: () {
-            if (otpController.text == order.otp) {
+            if (otpController.text == order.items.first.otp) {
               // ✅ OTP matches, complete order
-              foodMenu.completeOrder(order, orderNumber);
+              foodMenu.completeOrder(orderNumber);
               Navigator.pop(context); // Close dialog
             } else {
               // ❌ OTP incorrect, show error

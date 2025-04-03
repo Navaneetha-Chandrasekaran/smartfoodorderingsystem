@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 class TimelineAnimation extends StatefulWidget {
   final bool isPast;
   final Widget child;
+  final String orderNumber;
+  final Set<String> animatedOrders;
 
   const TimelineAnimation({
     super.key,
     required this.isPast,
     required this.child,
+    required this.orderNumber,
+    required this.animatedOrders
   });
 
   @override
@@ -36,11 +40,14 @@ class _TimelineAnimationState extends State<TimelineAnimation>
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
 
-    if (widget.isPast) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        _controller.forward().then((_) {
-          _controller.reverse();
-        });
+    if(widget.isPast && !widget.animatedOrders.contains(widget.orderNumber)){
+      widget.animatedOrders.add(widget.orderNumber);
+      Future.delayed(const Duration(milliseconds: 500), (){
+        if(mounted){
+          _controller.forward().then((_){
+            _controller.reverse();
+          });
+        }
       });
     }
   }

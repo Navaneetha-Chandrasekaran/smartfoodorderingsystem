@@ -5,7 +5,7 @@ import '../../../models/constants.dart';
 import '../../../models/titles.dart';
 import '../../../sheets/navigator.dart';
 import 'isthara/isthara.dart';
-import 'notfication_screen.dart';
+import 'notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.only(right: 20),
               child: IconButton(
                 onPressed: () {
-                  Navigation.navigateTo(context, NotficationScreen());
+                  Navigation.navigateTo(context, NotificationScreen());
                 },
                 icon: Icon(Icons.notifications, color: Colors.black, size: sw * 0.08),
               ),

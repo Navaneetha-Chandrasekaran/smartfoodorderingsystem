@@ -1,6 +1,8 @@
 // ignore_for_file: deprecated_member_use
 
+import 'package:bitetimenew/food_menu.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../ui/user/screens/timeline_screen.dart';
 import '../food.dart';
@@ -146,51 +148,39 @@ class CancelButton extends StatelessWidget {
   final String label;
   final Color? color;
   final Color? labelColor;
+  final VoidCallback onTap; // ✅ Added onTap parameter
 
   const CancelButton({
     super.key,
     required this.label,
     this.color,
-    this.labelColor, required Function() onTap,
+    this.labelColor,
+    required this.onTap, // ✅ Ensure onTap is required
   });
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
     return InkWell(
-      onTap: () => _showCancelReasonSheet(context), // ✅ Show BottomSheet on tap
+      onTap: onTap, // ✅ Call BottomSheet
       child: Container(
         width: screenWidth * 0.75,
-        height: screenWidth * 0.15, // ✅ Adjusted height
+        height: screenWidth * 0.15,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: color ?? Colors.red,
         ),
-        child: Center(child: SubTitles(title: label, color: labelColor ?? Colors.white)),
+        child: Center(
+          child: SubTitles(title: label, color: labelColor ?? Colors.white),
+        ),
       ),
     );
   }
+}
 
-  // ✅ Show BottomSheet for cancel reasons
-  void _showCancelReasonSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return CancelReasonSheet(
-          onConfirm: (String reason) {
-            Navigator.pop(context); // ✅ Close BottomSheet
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Order cancelled: $reason")),
-            );
-            _triggerNoOrdersScreen(context); // ✅ Trigger "No Orders" screen
-          },
-        );
-      },
-    );
-  }
+
+
+  
 
   // ✅ Navigates to "No Orders" Screen
   void _triggerNoOrdersScreen(BuildContext context) {
@@ -199,7 +189,6 @@ class CancelButton extends StatelessWidget {
       MaterialPageRoute(builder: (context) => const TimelineScreen()), // ✅ Reloads timeline to show "No Orders"
     );
   }
-}
 
 
 

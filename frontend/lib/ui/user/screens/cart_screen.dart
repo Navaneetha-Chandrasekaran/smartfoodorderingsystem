@@ -39,41 +39,45 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _placeOrder() {
-    if (_selectedTime == null) {
-      setState(() => _showTimeError = true);
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _showTimeError = false);
-      });
-      return;
-    }
+  final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+  
+  if (foodMenu.cart.isEmpty) return; // ✅ Prevent order placement when cart is empty
 
-    final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-    setState(() => _isOrderProcessing = true);
+  if (_selectedTime == null) {
+    setState(() => _showTimeError = true);
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showTimeError = false);
+    });
+    return;
+  }
 
-    // ✅ Show loading animation for 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
+  setState(() => _isOrderProcessing = true);
+
+  Future.delayed(const Duration(seconds: 5), () { // Combined loading + order placed delay
+    if (!mounted) return;
+
+    setState(() {
+      _isOrderProcessing = false;
+      _isOrderPlaced = true;
+    });
+
+    foodMenu.placeOrder(_selectedTime); // ✅ Pass pickup time to order
+
+    Future.delayed(const Duration(seconds: 3), () {
       if (!mounted) return;
+      setState(() => _isOrderPlaced = false);
 
-      setState(() {
-        _isOrderProcessing = false;
-        _isOrderPlaced = true;
-      });
-
-      // ✅ Show order placed animation for 3 seconds
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!mounted) return;
-
-        setState(() => _isOrderPlaced = false);
-        foodMenu.placeOrder();
-
-        // ✅ Navigate to Timeline Screen after all animations
+      // ✅ Prevent duplicate navigation by checking if mounted
+      if (mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const TimelineScreen()),
         );
-      });
+      }
     });
-  }
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -83,8 +87,9 @@ class _CartScreenState extends State<CartScreen> {
     final totalCost = foodMenu.getTotalPrice(); // ✅ Get total cost of cart
 
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: Titles(title: 'Cart'),
+        title: Titles(title: '🛒 Your Cart'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: secondaryColor,
@@ -119,61 +124,13 @@ class _CartScreenState extends State<CartScreen> {
                   ? OrderPlacedAnimation()
                   : userCart.isEmpty
                       ? _buildEmptyCartUI(context)
-                      : SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              _buildCartItems(userCart),
-                              const SizedBox(height: 10),
+                      : Column(
+                          children: [
+                            Expanded(child: _buildCartItems(userCart)),
 
-                              // ✅ Total Cost Section (Added Below Ordered Food)
-                              Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                padding: const EdgeInsets.all(15),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text(
-                                      "Total Cost:",
-                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      "₹${totalCost.toStringAsFixed(2)}",
-                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(height: 10),
-
-                              // ✅ Common Time Selector
-                              TimeSelector(
-                                selectedTime: _selectedTime,
-                                onTimeSelected: (time) {
-                                  setState(() {
-                                    _selectedTime = time;
-                                  });
-                                },
-                              ),
-
-                              SizedBox(height: screenWidth * 0.1),
-
-                              _buildPaymentSelector(),
-
-                              SizedBox(height: screenWidth * 0.1),
-
-                              // ✅ Order button
-                              OrderButton(
-                                onPressed: _isOrderProcessing ? null : _placeOrder,
-                              ),
-
-                              SizedBox(height: screenWidth * 0.1),
-                            ],
-                          ),
+                            // ✅ Floating Checkout Card
+                            _buildCheckoutSection(totalCost),
+                          ],
                         ),
 
           // ✅ Time Selection Error Popup
@@ -186,26 +143,95 @@ class _CartScreenState extends State<CartScreen> {
   /// ✅ Builds the cart items list with spacing
   Widget _buildCartItems(List userCart) {
     return ListView.separated(
+      padding: const EdgeInsets.all(16),
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       itemCount: userCart.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         return CartTile(cartItem: userCart[index]);
       },
     );
   }
 
-  /// ✅ Builds the Payment Selector UI
-  Widget _buildPaymentSelector() {
-    return PaymentSelector(
-      selectedPayment: _selectedPayment,
-      onPaymentChanged: (newPayment) {
-        setState(() => _selectedPayment = newPayment);
-        savePaymentPreference(newPayment);
-      },
+  /// ✅ Floating Checkout Card
+  Widget _buildCheckoutSection(double totalCost) {
+  return Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(30),
+        topRight: Radius.circular(30),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black12.withOpacity(0.1),
+          blurRadius: 10,
+          spreadRadius: 1,
+        ),
+      ],
+    ),
+    child: Column(
+      children: [
+        // ✅ Total Cost
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Total Cost:",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              "₹${totalCost.toStringAsFixed(2)}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+            ),
+          ],
+        ),
+        const SizedBox(height: 15),
+
+        // ✅ Time Selector
+        TimeSelector(
+          selectedTime: _selectedTime,
+          onTimeSelected: (time) {
+            if (time != _selectedTime) { // ✅ Avoid unnecessary state updates
+              setState(() {
+                _selectedTime = time;
+              });
+            }
+          },
+        ),
+
+        const SizedBox(height: 15),
+
+        // ✅ Payment Selector
+        _buildPaymentSelector(),
+
+        const SizedBox(height: 15),
+
+        // ✅ Order Button
+        OrderButton(
+          onPressed: _isOrderProcessing ? null : _placeOrder, // ✅ Prevent multiple taps
+        ),
+      ],
+      ),
     );
   }
+
+
+  /// ✅ Builds the Payment Selector UI
+  Widget _buildPaymentSelector() {
+  return PaymentSelector(
+    selectedPayment: _selectedPayment,
+    onPaymentChanged: (newPayment) {
+      if (newPayment != _selectedPayment) { // ✅ Avoid unnecessary rebuilds
+        setState(() => _selectedPayment = newPayment);
+        savePaymentPreference(newPayment);
+      }
+    },
+  );
+}
+
 
   /// ✅ UI for Empty Cart
   Widget _buildEmptyCartUI(BuildContext context) {
@@ -216,12 +242,12 @@ class _CartScreenState extends State<CartScreen> {
         children: [
           Image.asset('assets/empty.png', width: screenWidth * 0.5),
           const SizedBox(height: 20),
-          const Text("Your cart is empty!", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text("Oops! Your cart is empty.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          const Text("Looks like you haven't added anything yet.", style: TextStyle(color: Colors.grey)),
+          const Text("Let's add some delicious food!", style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 20),
           CustomButton(
-            label: 'Tap to Order!',
+            label: 'Browse Menu 🍽️',
             destination: CustomNavBar(),
           )
         ],
@@ -243,7 +269,7 @@ class _CartScreenState extends State<CartScreen> {
             color: Colors.redAccent,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Text("Please select a pickup time before ordering!", style: TextStyle(color: Colors.white)),
+          child: const Text("⚠️ Please select a pickup time!", style: TextStyle(color: Colors.white)),
         ),
       ),
     );

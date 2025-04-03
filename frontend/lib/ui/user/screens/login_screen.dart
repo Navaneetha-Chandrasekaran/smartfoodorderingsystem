@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
-import '../../../models/custom_dialog.dart';
 import '../../../models/titles.dart';
 import '../../../services/auth/login_auth.dart';
 import '../sheets/navbar.dart';

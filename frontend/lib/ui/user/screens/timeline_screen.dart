@@ -8,6 +8,28 @@ import '../../../models/timeline.dart';
 import '../../../models/cart_item.dart';
 import '../../../food_menu.dart';
 
+class OrderTimeline {
+  int currentStep;
+  String orderOtp;
+  Timer? pickupTimer;
+  int remainingSeconds;
+  bool pickupTimeExpired;
+  bool orderCancelled;
+  final String orderNumber;
+
+  OrderTimeline({
+    required this.orderNumber,
+    int? currentStep,
+    int? remainingSeconds,
+    bool? pickupTimeExpired,
+  })  : currentStep = currentStep ?? 0,  
+        orderOtp = (1000 + Random().nextInt(9000)).toString(),
+        remainingSeconds = remainingSeconds ?? 600, 
+        pickupTimeExpired = pickupTimeExpired ?? false,
+        orderCancelled = false;
+}
+
+
 class TimelineScreen extends StatefulWidget {
   const TimelineScreen({super.key});
 
@@ -16,81 +38,116 @@ class TimelineScreen extends StatefulWidget {
 }
 
 class _TimelineScreenState extends State<TimelineScreen> {
-  int _currentStep = 0;
-  String _orderOtp = '';
-  Timer? _pickupTimer;
-  int _remainingSeconds = 600; // ✅ 10-minute timer
-  bool _pickupTimeExpired = false;
-  bool _orderCancelled = false;
+  final List<OrderTimeline> _orders = [];
 
   @override
   void initState() {
     super.initState();
-    _generateOtp();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startTimelineAnimation());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeOrders());
   }
 
-  void _generateOtp() {
-    setState(() {
-      _orderOtp = (1000 + Random().nextInt(9000)).toString();
+  void _initializeOrders() {
+  final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+
+  // Use `getActiveOrders()` if `orders` is missing in FoodMenu.
+  final activeOrders = foodMenu.getActiveOrders();  
+
+  setState(() {
+    _orders.clear();
+      _orders.addAll(activeOrders.map((order) => 
+        OrderTimeline(
+          orderNumber: order.orderNumber.toString(),
+          currentStep: order.step,
+          remainingSeconds: order.remainingSeconds,
+          pickupTimeExpired: order.pickupTimeExpired
+        )
+      )); //  Convert orderNumber to String
     });
-  }
 
-  void _startTimelineAnimation() async {
-    for (int i = 0; i < 4; i++) {
-      await Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) {
-          setState(() {
-            _currentStep = i + 1;
-          });
+    for(var order in _orders){
+      if(order.currentStep < 4){
+        _startTimelineAnimation(order);  //Continue process
+      }
+      else if(!order.pickupTimeExpired){
+        _startPickupTimer(order);   //Resume pickup timer
+      }
+    }
 
-          if (_currentStep == 4) {
-            _startPickupTimer();
-          }
-        }
-      });
+  _startOrderTimers();
+}
+
+  void _startOrderTimers() {
+    for (var order in _orders) {
+      _startTimelineAnimation(order);
     }
   }
 
-  void _startPickupTimer() {
-    _pickupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingSeconds > 0) {
-        setState(() => _remainingSeconds--);
+ Future<void> _startTimelineAnimation(OrderTimeline order) async {
+  for (int i = order.currentStep + 1; i <= 4; i++) { // ✅ Resume from last step
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    setState(() {
+      order.currentStep = i;
+      if (i == 4) _startPickupTimer(order);
+    });
+  }
+}
+
+
+
+  void _startPickupTimer(OrderTimeline order) {
+    if (order.pickupTimer != null) return; 
+
+    order.pickupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (order.remainingSeconds > 0) {
+        setState(() {
+          order.remainingSeconds--; // ✅ Decrease remaining seconds every tick
+        });
       } else {
         timer.cancel();
-        setState(() => _pickupTimeExpired = true);
+        setState(() {
+          order.pickupTimeExpired = true;
+        });
       }
     });
   }
 
-  void _cancelOrder(String reason) {
-    final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-    foodMenu.cancelOrder();
-    _pickupTimer?.cancel();
 
-    setState(() {
-      _currentStep = 0;
-      _orderOtp = '';
-      _pickupTimeExpired = false;
-      _remainingSeconds = 600;
-      _orderCancelled = true;
-    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Order cancelled: $reason")),
-    );
+void _cancelOrder(int index, String reason) {
+  if (index < 0 || index >= _orders.length) return;
+
+  final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+  int orderNum = int.tryParse(_orders[index].orderNumber) ?? -1;
+  if (orderNum == -1) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Order not found!")));
+    return;
   }
+
+  foodMenu.cancelOrder(orderNum);
+
+  _orders[index].pickupTimer?.cancel();
+  _orders[index].pickupTimer = null;
+
+  setState(() {
+    _orders[index].orderCancelled = true;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Order cancelled: $reason"))); // ✅ Snackbar appears after UI update
+  });
+}
+
 
   @override
   void dispose() {
-    _pickupTimer?.cancel();
+    for (var order in _orders) {
+      order.pickupTimer?.cancel();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final orderedItems = Provider.of<FoodMenu>(context).lastOrderedItems;
-
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -99,34 +156,47 @@ class _TimelineScreenState extends State<TimelineScreen> {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: (_orderCancelled || orderedItems.isEmpty)
+      body: _orders.isEmpty // ✅ Check _orders instead of lastOrderedItems
           ? _buildNoOrderMessage()
-          : ListView(
+          : ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                const SizedBox(height: 20),
-                _buildOtpDisplay(),
-                const SizedBox(height: 20),
-                _buildOrderedFoodList(orderedItems),
-                const SizedBox(height: 20),
-                _buildTimelineSteps(),
-                if (_currentStep == 4) _buildPickupTimer(),
-                const SizedBox(height: 20),
-                CustomButton(
-                  label: "Cancel Order",
-                  gradientColors: [Colors.redAccent, Colors.red],
-                  onPressed: () => _showCancelReasonSheet(context),
-                  hasBorder: true,
-                  borderColor: Colors.white,
-                ),
-                const SizedBox(height: 30),
-              ],
+              itemCount: _orders.length,
+              itemBuilder: (context, index) {
+                final order = _orders[index];
+
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildOtpDisplay(order.orderOtp),
+                        const SizedBox(height: 20),
+                        _buildOrderedFoodList(Provider.of<FoodMenu>(context), order.orderNumber), // ✅ Fetch correct ordered items
+                        const SizedBox(height: 20),
+                        _buildTimelineSteps(order.currentStep),
+                        if (order.currentStep == 4) _buildPickupTimer(order),
+                        const SizedBox(height: 20),
+                        if (!order.orderCancelled)
+                          CustomButton(
+                            label: "Cancel Order",
+                            gradientColors: [Colors.redAccent, Colors.red],
+                            onPressed: () => _showCancelReasonSheet(context, index),
+                            hasBorder: true,
+                            borderColor: Colors.white,
+                          ),
+                        const SizedBox(height: 30),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
     );
   }
 
-  /// ✅ **Stylish OTP Display**
-  Widget _buildOtpDisplay() {
+  Widget _buildOtpDisplay(String otp) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -136,59 +206,82 @@ class _TimelineScreenState extends State<TimelineScreen> {
       ),
       child: Center(
         child: Text(
-          "Order OTP: $_orderOtp",
+          "Order OTP: $otp",
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
     );
   }
 
-  /// ✅ **Timeline Steps with Animated Event Cards**
-  Widget _buildTimelineSteps() {
+   /// ✅ **Timeline Steps with Animated Event Cards**
+  Widget _buildTimelineSteps(int currentStep) {
     return Column(
       children: [
-        Timeline(
-          isFirst: true,
-          isLast: false,
-          isPast: _currentStep >= 1,
-          eventCard: EventCard(isPast: _currentStep >= 1, child: const Text('Order Placed')),
-        ),
-        Timeline(
-          isFirst: false,
-          isLast: false,
-          isPast: _currentStep >= 2,
-          eventCard: EventCard(isPast: _currentStep >= 2, child: const Text('Order Confirmed')),
-        ),
-        Timeline(
-          isFirst: false,
-          isLast: false,
-          isPast: _currentStep >= 3,
-          eventCard: EventCard(isPast: _currentStep >= 3, child: const Text('Order Getting Ready')),
-        ),
-        Timeline(
-          isFirst: false,
-          isLast: true,
-          isPast: _currentStep >= 4,
-          eventCard: EventCard(isPast: _currentStep >= 4, child: const Text('Ready for Pickup')),
-        ),
+        Timeline(isFirst: true, isLast: false, isPast: currentStep >= 1, eventCard: EventCard(isPast: currentStep >= 1, child: const Text('Order Placed'))),
+        Timeline(isFirst: false, isLast: false, isPast: currentStep >= 2, eventCard: EventCard(isPast: currentStep >= 2, child: const Text('Order Confirmed'))),
+        Timeline(isFirst: false, isLast: false, isPast: currentStep >= 3, eventCard: EventCard(isPast: currentStep >= 3, child: const Text('Order Getting Ready'))),
+        Timeline(isFirst: false, isLast: true, isPast: currentStep >= 4, eventCard: EventCard(isPast: currentStep >= 4, child: const Text('Ready for Pickup'))),
       ],
     );
   }
 
   /// ✅ **Pickup Timer UI**
-  Widget _buildPickupTimer() {
-    int minutes = _remainingSeconds ~/ 60;
-    int seconds = _remainingSeconds % 60;
+  Widget _buildPickupTimer(OrderTimeline order) {
+    int minutes = order.remainingSeconds ~/ 60;
+    int seconds = order.remainingSeconds % 60;
 
     return Center(
       child: Text(
-        _pickupTimeExpired ? "Pickup time expired!" : "Pickup Time Remaining: $minutes:${seconds.toString().padLeft(2, '0')}",
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _pickupTimeExpired ? Colors.red : Colors.green),
+        order.pickupTimeExpired
+            ? "Pickup time expired!"
+            : "Pickup Time Remaining: $minutes:${seconds.toString().padLeft(2, '0')}",
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: order.pickupTimeExpired ? Colors.red : Colors.green),
       ),
     );
   }
 
-  /// ✅ **"No Orders" Message**
+
+  Widget _buildOrderedFoodList(FoodMenu foodMenu, String orderNumber) {
+  final orderedItems = foodMenu.getActiveOrders().firstWhere(
+  (order) => order.orderNumber.toString() == orderNumber,
+  orElse: () => Order(orderNumber: -1, items: [], orderPlacedTime: DateTime.now()), // ✅ Return a valid Order object
+  ).items;
+// ✅ Access `items` from `Order` object
+
+  if (orderedItems.isEmpty) return const SizedBox();
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text("Ordered Items:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 10),
+      ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: orderedItems.length,
+        itemBuilder: (context, index) {
+          return _buildFoodItemTile(orderedItems[index]);
+        },
+      ),
+    ],
+  );
+}
+
+
+  Widget _buildFoodItemTile(CartItem cartItem) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      elevation: 3,
+      child: ListTile(
+        leading: Image.asset(cartItem.food.image, width: 50, height: 50, fit: BoxFit.cover),
+        title: Text(cartItem.food.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text("Qty: ${cartItem.quantity}"),
+        trailing: Text("₹${(cartItem.food.price * cartItem.quantity).toStringAsFixed(2)}"),
+      ),
+    );
+  }
+
   Widget _buildNoOrderMessage() {
     return Center(
       child: Column(
@@ -205,77 +298,59 @@ class _TimelineScreenState extends State<TimelineScreen> {
       ),
     );
   }
-}
 
-
-// ✅ Build Individual Ordered Food Tile
-  Widget _buildFoodItemTile(CartItem cartItem) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      elevation: 3,
-      child: ListTile(
-        leading: Image.asset(cartItem.food.image, width: 50, height: 50, fit: BoxFit.cover),
-        title: Text(cartItem.food.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text("Qty: ${cartItem.quantity}"),
-        trailing: Text("₹${(cartItem.food.price * cartItem.quantity).toStringAsFixed(2)}"),
-      ),
+  void _showCancelReasonSheet(BuildContext context, int index) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return CancelReasonSheet(
+          orderNumber: _orders[index].orderNumber, 
+          onConfirm: (reason) {
+            Navigator.pop(context); // ✅ Close bottom sheet first
+            _cancelOrder(index, reason); // ✅ Then cancel order
+          },
+        );
+      },
     );
   }
 
-// ✅ Build Ordered Food List Widget
-  Widget _buildOrderedFoodList(List<CartItem> orderedItems) {
-  if (orderedItems.isEmpty) {
-    return SizedBox(); // ✅ Ensures no empty list UI appears after cancel
-  }
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        "Ordered Items:",
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-      ),
-      const SizedBox(height: 10),
-      ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: orderedItems.length,
-        itemBuilder: (context, index) {
-          final cartItem = orderedItems[index];
-          return _buildFoodItemTile(cartItem);
-        },
-      ),
-    ],
-  );
+    // ✅ Show BottomSheet for cancel reasons
+// void _showCancelReasonSheet(BuildContext context, int orderIndex) {
+//   final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+//   final orders = foodMenu.getActiveOrders();
+
+//   if (orderIndex < 0 || orderIndex >= orders.length) return; // ✅ Prevent crashes
+
+//   showModalBottomSheet(
+//     context: context,
+//     shape: const RoundedRectangleBorder(
+//       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+//     ),
+//     builder: (context) {
+//       return CancelReasonSheet(
+//         orderNumber: orders[orderIndex].orderNumber.toString(), // ✅ Pass order number
+//         onConfirm: (String reason) {
+//           _cancelOrder(context, orderIndex, reason); // ✅ Cancel order correctly
+//         },
+//       );
+//     },
+//   );
+// }
+
+
 }
-
-// ✅ Show Cancel Reason BottomSheet
-void _showCancelReasonSheet(BuildContext context) {
-  showModalBottomSheet(
-    context: context,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (context) {
-      return CancelReasonSheet(onConfirm: (reason) {
-        Navigator.pop(context); // ✅ Close BottomSheet
-
-        // ✅ Trigger cancellation and update UI
-        final timelineState = context.findAncestorStateOfType<_TimelineScreenState>();
-        if (timelineState != null) {
-          timelineState._cancelOrder(reason);
-        }
-      });
-    },
-  );
-}
-
 
 // ✅ Cancel Reason BottomSheet
 class CancelReasonSheet extends StatefulWidget {
   final Function(String) onConfirm;
-  const CancelReasonSheet({required this.onConfirm});
+  final String orderNumber;
+
+  const CancelReasonSheet({
+    required this.onConfirm,
+    required this.orderNumber,
+  });
 
   @override
   _CancelReasonSheetState createState() => _CancelReasonSheetState();
@@ -329,19 +404,8 @@ class _CancelReasonSheetState extends State<CancelReasonSheet> {
             onPressed: _selectedReason == null
                 ? null
                 : () {
-                    widget.onConfirm(_selectedReason!); // ✅ Call cancellation function
-
-                    // ✅ Clear last ordered items and update UI
-                    final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-                    foodMenu.cancelOrder(); // Removes timeline and last ordered items
-
-                    Navigator.pop(context); // ✅ Close BottomSheet
-
-                    // ✅ Navigate back to refresh the screen
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => const TimelineScreen()),
-                    );
+                    widget.onConfirm(_selectedReason!); // ✅ Pass reason
+                    Navigator.pop(context); // ✅ Close bottom sheet
                   },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,

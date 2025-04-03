@@ -1,3 +1,4 @@
+import 'package:bitetimenew/ui/canteen/screens/profile_screen.dart';
 import 'package:bitetimenew/ui/canteen/sheets/navbar.dart';
 import 'package:bitetimenew/ui/user/screens/onboard_screen.dart';
 import 'package:bitetimenew/ui/user/sheets/navbar.dart';
@@ -23,6 +24,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (context) => ThemeProvider()),
         ChangeNotifierProvider(create: (context) => FoodMenu()),
+        // ChangeNotifierProvider(create: (context) => TimelineModel(), child: MyApp())
       ],
       child: const MyApp(),
     ),
@@ -36,7 +38,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: UserSelectionScreen(),
+      home: CustomNavBar(),
       theme: Provider.of<ThemeProvider>(context).themeData,
     );
   }
