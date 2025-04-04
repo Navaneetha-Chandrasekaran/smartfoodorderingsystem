@@ -54,7 +54,7 @@ class OrdersScreen extends StatelessWidget {
                         itemCount: completedOrders.length,
                         itemBuilder: (context, index) {
                           final order = completedOrders[index];
-                          final orderNumber = foodMenu.getOrderNumber(order); // ✅ Fetch order number
+                          final orderNumber = order.orderNumber; // ✅ Fetch order number
 
                           return Card(
                             margin: const EdgeInsets.symmetric(vertical: 8),
@@ -89,12 +89,12 @@ class OrdersScreen extends StatelessWidget {
                                     children: [
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
-                                        child: Image.asset(order.food.image, width: 60, height: 60, fit: BoxFit.cover),
+                                        child: Image.asset(order.items.first.food.image, width: 60, height: 60, fit: BoxFit.cover),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          order.food.name,
+                                          order.items.first.food.name,
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
@@ -104,7 +104,7 @@ class OrdersScreen extends StatelessWidget {
                                         ),
                                       ),
                                       Text(
-                                        "Qty: ${order.quantity}",
+                                        "Qty: ${order.items.first.quantity}",
                                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
                                       ),
                                     ],
@@ -120,13 +120,13 @@ class OrdersScreen extends StatelessWidget {
                                           Icon(Icons.verified, color: Colors.red[600], size: 20),
                                           const SizedBox(width: 4),
                                           Text(
-                                            "OTP: ${order.otp ?? "----"}",
+                                            "OTP: ${order.items.first.otp ?? "----"}",
                                             style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600]),
                                           ),
                                         ],
                                       ),
                                       Text(
-                                        "₹${(order.food.price * order.quantity).toStringAsFixed(2)}",
+                                        "₹${(order.items.first.food.price * order.items.first.quantity).toStringAsFixed(2)}",
                                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
                                       ),
                                     ],

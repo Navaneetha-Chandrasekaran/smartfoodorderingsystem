@@ -9,9 +9,12 @@ class Order {
   final TimeOfDay? pickupTime;
   final DateTime orderPlacedTime;
   final Duration preparationTime;
+  final String? paymentMode;
+  bool expired;
 
   int step;
   bool isCancelled;
+  DateTime? readyTime;
   bool pickupTimeExpired;
 
   Order({
@@ -20,10 +23,12 @@ class Order {
     this.pickupTime,
     required this.orderPlacedTime,
     this.preparationTime = const Duration(minutes: 10),
-
-    this.step = 1,                // Default to step 1
-    this.isCancelled = false,     // Default to not cancelled
-    this.pickupTimeExpired = false, // Default to not expired
+    this.paymentMode,
+    this.step = 1,
+    this.isCancelled = false,
+    this.readyTime,
+    this.pickupTimeExpired = false,
+    this.expired = false, // ✅ properly initialized here
   });
   
   /// ✅ Compute remaining time dynamically
@@ -132,28 +137,38 @@ class FoodMenu extends ChangeNotifier {
   ];
 
 
-  final List<CartItem> _cart = [];
-  final List<Order> _orders = [];
-  List<CartItem> _lastOrderedItems = [];
-  List<CartItem> _upcomingOrders = [];
-  final List<CartItem> _completedOrders = [];
-  final Map<CartItem, int> _orderSteps = {};
-  final Map<CartItem, int> _orderNumbers = {};
-  int _nextOrderNumber = 1;
-  bool _isOrderCancelled = false;
+ final List<CartItem> _cart = [];
+final List<Order> _orders = [];
+List<CartItem> _lastOrderedItems = [];
+List<Order> _upcomingOrders = [];
+final List<Order> _completedOrders = [];
+final Map<int, int> _orderSteps = {};
+final Map<Order, int> _orderNumbers = {};
+int _nextOrderNumber = 1;
+bool _isOrderCancelled = false;
 
-  // ✅ Getters
-  List<Food> get menu => _menu;
-  List<CartItem> get cart => _cart;
-  List<CartItem> get lastOrderedItems => _lastOrderedItems;
-  List<CartItem> get upcomingOrders => _upcomingOrders;
-  List<CartItem> get completedOrders => _completedOrders;
-  bool get isOrderCancelled => _isOrderCancelled;
+// ✅ Getters
+List<Food> get menu => _menu;
+List<CartItem> get cart => _cart;
+List<CartItem> get lastOrderedItems => _lastOrderedItems;
+// List<Order> getActiveOrders() => _activeOrders;
+List<Order> getCompletedOrders() => _completedOrders;
+List<Order> get upcomingOrders => _upcomingOrders;
+List<Order> get completedOrders => _completedOrders;
+bool get isOrderCancelled => _isOrderCancelled;
+int get nextOrderNumber => _nextOrderNumber;
+
 
   // ✅ Returns a list of all active (non-cancelled) orders
+  
   List<Order> getActiveOrders() {
-    return _orders.where((order) => order.isCancelled != true).toList();
-  }
+  final completedOrderIds = _completedOrders.map((o) => o.orderNumber).toSet();
+  return [..._orders, ..._upcomingOrders]
+      .where((order) => order.isCancelled != true && !completedOrderIds.contains(order.orderNumber))
+      .toList();
+}
+
+
 
   // ✅ Returns the list of ordered items from the most recent order
 //   List<CartItem> getOrderItems(String orderNumber) {
@@ -218,6 +233,7 @@ class FoodMenu extends ChangeNotifier {
     );
 
     _orders.add(newOrder);
+    _upcomingOrders.add(newOrder);
     _cart.clear();
     notifyListeners(); // ✅ Ensure UI updates after order placement
   }
@@ -277,23 +293,27 @@ void cancelOrder(int orderNumber) {
   }
 
   // ✅ Mark an order as ready
-  void markOrderReady(CartItem order) {
-    _lastOrderedItems.remove(order);
-    _upcomingOrders.remove(order);
-    notifyListeners();
+ void markOrderReady(Order order) {
+  if (order.items.isNotEmpty) {
+    _lastOrderedItems.removeWhere((item) => item.food == order.items.first.food);
   }
+  _upcomingOrders.remove(order);
+  notifyListeners();
+}
 
   // ✅ Add a new order to upcoming orders
-  void addOrder(CartItem order) {
-    _upcomingOrders.add(order);
-    _orderSteps[order] = 1;
-    _orderNumbers[order] = _nextOrderNumber++;
-    notifyListeners();
-  }
+  void addOrder(Order order) {
+  _upcomingOrders.add(order); // Add the entire Order, not just a CartItem
+  _orderSteps[order.orderNumber] = 1; // Initialize the order's step to 1
+  _orderNumbers[order] = _nextOrderNumber++; // Assign a unique order number
+  incrementOrderNumber();
+  notifyListeners(); // Notify listeners for UI update
+}
+
 
   // ✅ Get the current step of an order
-  int getOrderStep(CartItem order) {
-    return _orderSteps[order] ?? 1;
+  int getOrderStep(Order order) {
+    return _orderSteps[order.orderNumber] ?? 1;
   }
 
   // ✅ Get Order Number
@@ -303,19 +323,16 @@ void cancelOrder(int orderNumber) {
 
   // ✅ Move Order to Next Step
   void nextOrderStep(int orderNumber) {
-    Order? order = _orders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
-    if (order == null || order.step >= 4) return;
+  if (_orderSteps[orderNumber] == 4) return; // ✅ Stop at last step
+  _orderSteps[orderNumber] = (_orderSteps[orderNumber] ?? 0) + 1;
+  notifyListeners(); // ✅ Ensure UI updates
+}
 
-    if (order.step == 1 && !_orderProgress.containsKey(orderNumber)) {
-      for (var item in order.items) {
-        item.food.availableQuantity = (item.food.availableQuantity - item.quantity).clamp(0, item.food.availableQuantity);
-      }
-      _orderProgress[orderNumber] = 1; // ✅ Prevent duplicate stock reduction
-    }
 
-    order.step++;
-    notifyListeners();
+  int getNextOrderNumber(){
+    return _nextOrderNumber;
   }
+
 
 
 
@@ -338,23 +355,36 @@ void cancelOrder(int orderNumber) {
 
 
   // ✅ Move order to "Completed Orders"
-final List<Order> _completedOrdersList = [];
+// final List<Order> _completedOrdersList = [];
 
 void completeOrder(int orderNumber) {
-  Order? order = _orders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
+  Order? order;
+
+  // Try to find in _orders
+  order = _orders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
   if (order != null) {
     _orders.remove(order);
-    _completedOrdersList.add(order); // ✅ Store full order instead of just items
+  }
+
+  // Try to find in _upcomingOrders if not found
+  if (order == null) {
+    order = _upcomingOrders.firstWhereOrNull((o) => o.orderNumber == orderNumber);
+    if (order != null) {
+      _upcomingOrders.remove(order);
+    }
+  }
+
+  if (order != null) {
+    _completedOrders.add(order);
     notifyListeners();
   }
 }
 
 
-// ✅ Get completed orders
-List<Order> getCompletedOrders() {
-  return _completedOrdersList;
-}
 
+
+
+// ✅ Get completed orders
 
 
   // ✅ Update Stocks
@@ -368,6 +398,12 @@ List<Order> getCompletedOrders() {
     _upcomingOrders.clear();
     _completedOrders.clear();
     _orderSteps.clear();
+    notifyListeners();
+  }
+
+
+  void incrementOrderNumber(){
+    _nextOrderNumber++;
     notifyListeners();
   }
 

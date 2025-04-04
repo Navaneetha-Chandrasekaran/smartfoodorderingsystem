@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:bitetimenew/ui/canteen/sheets/navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/buttons.dart';
@@ -7,6 +8,7 @@ import '../../../models/event_card.dart';
 import '../../../models/timeline.dart';
 import '../../../models/cart_item.dart';
 import '../../../food_menu.dart';
+import '../../../sheets/navigator.dart';
 
 class OrderTimeline {
   int currentStep;
@@ -48,33 +50,32 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   void _initializeOrders() {
   final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-
-  // Use `getActiveOrders()` if `orders` is missing in FoodMenu.
-  final activeOrders = foodMenu.getActiveOrders();  
+  final activeOrders = foodMenu.getActiveOrders();
 
   setState(() {
-    _orders.clear();
-      _orders.addAll(activeOrders.map((order) => 
-        OrderTimeline(
+    for (var order in activeOrders) {
+      final existing = _orders.indexWhere((o) => o.orderNumber == order.orderNumber.toString());
+      if (existing == -1) {
+        final newOrder = OrderTimeline(
           orderNumber: order.orderNumber.toString(),
           currentStep: order.step,
           remainingSeconds: order.remainingSeconds,
-          pickupTimeExpired: order.pickupTimeExpired
-        )
-      )); //  Convert orderNumber to String
-    });
+          pickupTimeExpired: order.pickupTimeExpired,
+        );
+        _orders.add(newOrder);
 
-    for(var order in _orders){
-      if(order.currentStep < 4){
-        _startTimelineAnimation(order);  //Continue process
-      }
-      else if(!order.pickupTimeExpired){
-        _startPickupTimer(order);   //Resume pickup timer
+        if (newOrder.currentStep < 4) {
+          _startTimelineAnimation(newOrder);
+        } else if (!newOrder.pickupTimeExpired) {
+          _startPickupTimer(newOrder);
+        }
       }
     }
+  });
 
   _startOrderTimers();
 }
+
 
   void _startOrderTimers() {
     for (var order in _orders) {
@@ -179,12 +180,14 @@ void _cancelOrder(int index, String reason) {
                         if (order.currentStep == 4) _buildPickupTimer(order),
                         const SizedBox(height: 20),
                         if (!order.orderCancelled)
-                          CustomButton(
-                            label: "Cancel Order",
-                            gradientColors: [Colors.redAccent, Colors.red],
-                            onPressed: () => _showCancelReasonSheet(context, index),
-                            hasBorder: true,
-                            borderColor: Colors.white,
+                          Center(
+                            child: CustomButton(
+                              label: "Cancel Order",
+                              gradientColors: [Colors.redAccent, Colors.red],
+                              onPressed: () => _showCancelReasonSheet(context, index),
+                              hasBorder: true,
+                              borderColor: Colors.white,
+                            ),
                           ),
                         const SizedBox(height: 30),
                       ],
@@ -307,8 +310,8 @@ void _cancelOrder(int index, String reason) {
         return CancelReasonSheet(
           orderNumber: _orders[index].orderNumber, 
           onConfirm: (reason) {
-            Navigator.pop(context); // ✅ Close bottom sheet first
-            _cancelOrder(index, reason); // ✅ Then cancel order
+          Navigator.pop(context); // ✅ Close bottom sheet before navigation
+          _cancelOrder(index, reason); // ✅ Cancel the order
           },
         );
       },
@@ -402,11 +405,12 @@ class _CancelReasonSheetState extends State<CancelReasonSheet> {
           // ✅ Confirm Cancellation Button
           ElevatedButton(
             onPressed: _selectedReason == null
-                ? null
-                : () {
-                    widget.onConfirm(_selectedReason!); // ✅ Pass reason
-                    Navigator.pop(context); // ✅ Close bottom sheet
-                  },
+              ? null
+              : () {
+                  final reason = _selectedReason!;
+                  Navigator.pop(context);        // ✅ Close the bottom sheet first
+                  widget.onConfirm(reason);      // ✅ Then call the callback safely
+                },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
