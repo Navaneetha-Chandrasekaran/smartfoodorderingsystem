@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:bitetimenew/ui/canteen/sheets/navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/buttons.dart';
@@ -8,7 +7,6 @@ import '../../../models/event_card.dart';
 import '../../../models/timeline.dart';
 import '../../../models/cart_item.dart';
 import '../../../food_menu.dart';
-import '../../../sheets/navigator.dart';
 
 class OrderTimeline {
   int currentStep;

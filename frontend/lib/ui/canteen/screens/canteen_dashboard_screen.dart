@@ -19,7 +19,7 @@
       return Consumer<FoodMenu>(
         builder: (context, foodMenu, child) {
           final totalOrders = foodMenu.getActiveOrders().length;
-          final completedOrdersCount = foodMenu.getCompletedOrders().length; // Assuming this method exists
+          // final completedOrdersCount = foodMenu.getCompletedOrders().length; // Assuming this method exists
           
           return ListView(
             children: [
@@ -27,7 +27,7 @@
               _buildHeader(),
               
               // Order Summary Section
-              _buildOrderSummary(context, totalOrders, completedOrdersCount),
+              // _buildOrderSummary(context, totalOrders, completedOrdersCount),
               
               // Upcoming Orders Section
               _buildUpcomingOrders(foodMenu),

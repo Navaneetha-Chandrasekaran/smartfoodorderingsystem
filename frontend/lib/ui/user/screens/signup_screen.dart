@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
+import '../../../models/error_dialog.dart';
 import '../../../models/titles.dart';
 import 'login_screen.dart';
 import 'otp_screen.dart';
@@ -15,7 +16,7 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  final SignupAuth _signupAuth = SignupAuth(); // ✅ Initialize AuthService
+  final SignupAuth _signupAuth = SignupAuth();
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -49,61 +50,88 @@ class _SignUpScreenState extends State<SignUpScreen> {
     });
   }
 
-  /// ✅ **Handle Signup**
+  /// ✅ Handle Signup
   Future<void> _handleSignup() async {
-  setState(() {
-    _isLoading = true;
-  });
+    setState(() {
+      _isLoading = true;
+    });
 
-  final name = _nameController.text.trim();
-  final email = _emailController.text.trim();
-  final phone = _phoneController.text.trim();
-  final password = _passwordController.text.trim();
-  final confirmPassword = _confirmPasswordController.text.trim();
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
 
-  if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-    _showSnackBar("All fields are required");
+    if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      ErrorDialog.show(
+        context,
+        title: "Missing Fields",
+        message: "Please fill all fields.",
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    if (!email.endsWith('@shanmugha.edu.in')) {
+      ErrorDialog.show(
+        context,
+        title: "Invalid Email",
+        message: "Use your college email ending with @shanmugha.edu.in.",
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final response = await _signupAuth.registerStudent(name, email, phone, password, confirmPassword);
+
+    if (response['success']) {
+      _showSuccessDialog("Signup Successful", "✅ OTP has been sent to your email");
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtpScreen(email: response['email']),
+        ),
+      );
+    } else {
+      ErrorDialog.show(
+        context,
+        title: "Signup Failed",
+        message: response['message'] ?? "An error occurred.",
+        onRetry: _handleSignup,
+      );
+    }
+
     setState(() {
       _isLoading = false;
     });
-    return;
   }
 
-  if (!email.endsWith('@shanmugha.edu.in')) {
-    _showSnackBar("Email must be from @shanmugha.edu.in domain");
-    setState(() {
-      _isLoading = false;
-    });
-    return;
-  }
-
-  /// ❌ **Wrong: `signup.registerStudent`**
-  /// ✅ **Correct: `_signupAuth.registerStudent`**
-  final response = await _signupAuth.registerStudent(name, email, phone, password, confirmPassword);
-
-  if (response['success']) {
-    _showSnackBar("Signup Successful! OTP sent to email");
-
-    /// ✅ **Navigate to OTP Verification Screen**
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => OtpScreen(email: response['email']),
+  /// ✅ Success Dialog
+  void _showSuccessDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
       ),
-    );
-  } else {
-    _showSnackBar(response['message']); // Show error message
-  }
-
-  setState(() {
-    _isLoading = false;
-  });
-}
-
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
     );
   }
 
@@ -128,7 +156,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             children: [
               SizedBox(height: screenHeight * 0.08),
 
-              /// ✅ **Title**
+              /// ✅ Title
               Text(
                 "Create Your Account",
                 style: GoogleFonts.poppins(
@@ -140,12 +168,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
               SizedBox(height: screenHeight * 0.03),
 
-              /// ✅ **App Logo**
+              /// ✅ Logo
               Image.asset("assets/logo.png", width: screenWidth * 0.7),
 
               SizedBox(height: screenHeight * 0.03),
 
-              /// ✅ **Sign Up Form**
+              /// ✅ Sign Up Form
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
                 margin: const EdgeInsets.symmetric(horizontal: 30),
@@ -185,12 +213,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                     SizedBox(height: screenHeight * 0.02),
 
-                    /// ✅ **Register Button**
+                    /// ✅ Register Button
                     _isLoading
-                        ? Center(child: CircularProgressIndicator()) // ✅ Show loading
+                        ? const Center(child: CircularProgressIndicator())
                         : CustomButton(
                             label: "Register",
-                            onPressed: _handleSignup, // ✅ Call signup function
+                            onPressed: _handleSignup,
                             labelColor: Colors.white,
                             width: double.infinity,
                             height: screenHeight * 0.07,
@@ -199,12 +227,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                     SizedBox(height: screenHeight * 0.02),
 
-                    /// ✅ **Already Have an Account?**
+                    /// ✅ Already Have an Account?
                     Center(
                       child: rowText(
                         text: "Already have an account?",
                         buttonText: "Sign In",
-                        destination: UserLoginScreen(),
+                        destination: const UserLoginScreen(),
                       ),
                     ),
                   ],

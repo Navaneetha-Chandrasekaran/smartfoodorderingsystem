@@ -1,13 +1,14 @@
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class SignupAuth {
-  final String baseUrl = 'http://10.0.2.2:3000/api/auth'; // ✅ Use correct API URL
+  final String baseUrl = dotenv.env['API_BASE_URL']!; // ✅ Use correct API URL
 
   /// ✅ **Register Student**
   Future<Map<String, dynamic>> registerStudent(
       String name, String email, String phone, String password, String confirmPassword) async {
-    final url = Uri.parse('$baseUrl/register/student'); // ✅ Correct API endpoint
+    final url = Uri.parse('$baseUrl/auth/register/student'); // ✅ Correct API endpoint
 
     try {
       final response = await http.post(

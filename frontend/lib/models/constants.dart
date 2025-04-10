@@ -140,15 +140,15 @@ class CustomTextField extends StatelessWidget {
 class Shops extends StatefulWidget {
   const Shops({
     super.key,
-    required this.Icon,
-    required this.ShopName,
-    required this.Status,
+    required this.icon,
+    required this.shopName,
+    required this.status,
     this.destination,
   });
 
-  final Image Icon;
-  final SubTitles ShopName;
-  final Image Status;
+  final Image icon;
+  final SubTitles shopName;
+  final Image status;
   final Widget? destination;
 
   @override
@@ -167,12 +167,14 @@ class _ShopsState extends State<Shops> {
       onTapDown: (_) => setState(() => _isTapped = true),
       onTapUp: (_) => setState(() => _isTapped = false),
       onTapCancel: () => setState(() => _isTapped = false),
-      onTap: widget.destination != null ? () => Navigation.navigateTo(context, widget.destination!) : null,
+      onTap: widget.destination != null
+          ? () => Navigation.navigateTo(context, widget.destination!)
+          : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         width: sw * 0.85,
         height: sh * 0.08,
-        padding: EdgeInsets.symmetric(horizontal: 15),
+        padding: const EdgeInsets.symmetric(horizontal: 15),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
           gradient: LinearGradient(
@@ -183,36 +185,16 @@ class _ShopsState extends State<Shops> {
             end: Alignment.bottomRight,
           ),
           boxShadow: _isTapped
-              ? [
-                  BoxShadow(color: Colors.greenAccent, blurRadius: 10, spreadRadius: 2),
-                ]
-              : [
-                  BoxShadow(
-                    color: Colors.black12.withOpacity(0.2),
-                    blurRadius: 8,
-                    spreadRadius: 2,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-          border: Border.all(
-            color: Colors.green.withOpacity(0.5),
-            width: 1.5,
-          ),
+              ? [BoxShadow(color: Colors.greenAccent, blurRadius: 10, spreadRadius: 2)]
+              : [BoxShadow(color: Colors.black12.withOpacity(0.2), blurRadius: 8, spreadRadius: 2, offset: const Offset(0, 4))],
+          border: Border.all(color: Colors.green.withOpacity(0.5), width: 1.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            widget.Icon,
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(left: 10),
-                child: widget.ShopName,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 15),
-              child: widget.Status,
-            ),
+            widget.icon,
+            Expanded(child: Padding(padding: const EdgeInsets.only(left: 20), child: widget.shopName)),
+            Padding(padding: const EdgeInsets.only(right: 15), child: widget.status),
           ],
         ),
       ),

@@ -1,12 +1,13 @@
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class OtpService {
-  final String baseUrl = 'http://10.0.2.2:3000/api/auth'; // ✅ Correct API URL
+  final String baseUrl = dotenv.env['API_BASE_URL']!; // ✅ Correct API URL
 
   /// ✅ **Verify OTP**
   Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
-    final url = Uri.parse('$baseUrl/verify-otp');
+    final url = Uri.parse('$baseUrl/auth/verify-otp');
 
     try {
       final response = await http.post(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
+import '../../../models/error_dialog.dart';
 import '../../../models/titles.dart';
 import '../../../services/auth/login_auth.dart';
 import '../sheets/navbar.dart';
@@ -38,90 +39,93 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
 
   /// ✅ **Handle Login**
   Future<void> _handleLogin() async {
-  setState(() {
-    _isLoading = true;
-  });
-
-  final email = _emailController.text.trim();
-  final password = _passwordController.text.trim();
-
-  if (email.isEmpty || password.isEmpty) {
-    _showErrorDialog("Missing Fields", "⚠️ Please enter email and password.");
     setState(() {
-      _isLoading = false;
+      _isLoading = true;
     });
-    return;
-  }
 
-  try {
-    print("⏳ Sending login request..."); // Debugging log
-    final response = await _authService.loginUser(email, password);
-    print("✅ API Response: $response"); // Debugging log
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-    if (response['success']) {
-      print("🎉 Login Successful");
-
-      // ✅ Delay navigation to avoid UI issues
-      Future.delayed(Duration(milliseconds: 500), () {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => CustomNavBar()),
-          );
-        }
+    if (email.isEmpty || password.isEmpty) {
+      ErrorDialog.show(
+        context,
+        title: "Missing Fields",
+        message: "⚠️ Please enter email and password.",
+      );
+      setState(() {
+        _isLoading = false;
       });
-
-      _showSuccessDialog("Login Successful", "✅ Welcome back!");
-    } else {
-      print("❌ Login Failed: ${response['message']}");
-      _showErrorDialog("Login Failed", response['message']);
+      return;
     }
-  } catch (e) {
-    print("🚨 Error during login: $e");
-    _showErrorDialog("Error", "🚨 Login failed: $e");
+
+    try {
+      print("⏳ Sending login request...");
+      final response = await _authService.loginUser(email, password);
+      print("✅ API Response: $response");
+
+      if (response['success']) {
+        print("🎉 Login Successful");
+
+        // ✅ Delay navigation to avoid UI issues
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const CustomNavBar()),
+            );
+          }
+        });
+
+        _showSuccessDialog("Login Successful", "✅ Welcome back!");
+      } else {
+        print("❌ Login Failed: ${response['message']}");
+        ErrorDialog.show(
+          context,
+          title: "Login Failed",
+          message: response['message'] ?? "Something went wrong",
+          onRetry: _handleLogin,
+        );
+      }
+    } catch (e) {
+      print("🚨 Error during login: $e");
+      ErrorDialog.show(
+        context,
+        title: "Error",
+        message: "🚨 Login failed: $e",
+        onRetry: _handleLogin,
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-  if (mounted) {
-    setState(() {
-      _isLoading = false;
-    });
+  /// ✅ **Show Success Dialog**
+  void _showSuccessDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
   }
-}
-
-/// ✅ **Show Error Dialog**
-void _showErrorDialog(String title, String message) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("OK"),
-        ),
-      ],
-    ),
-  );
-}
-
-/// ✅ **Show Success Dialog**
-void _showSuccessDialog(String title, String message) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("OK"),
-        ),
-      ],
-    ),
-  );
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -206,10 +210,10 @@ void _showSuccessDialog(String title, String message) {
 
                     /// ✅ **Login Button**
                     _isLoading
-                        ? const Center(child: CircularProgressIndicator()) // ✅ Show loader
+                        ? const Center(child: CircularProgressIndicator())
                         : CustomButton(
                             label: "Login",
-                            onPressed: _handleLogin, // ✅ Call login function
+                            onPressed: _handleLogin,
                             labelColor: Colors.white,
                             width: double.infinity,
                             height: screenHeight * 0.07,
@@ -223,7 +227,7 @@ void _showSuccessDialog(String title, String message) {
                       child: rowText(
                         text: "Don't have an account?",
                         buttonText: "Sign Up",
-                        destination: SignUpScreen(),
+                        destination: const SignUpScreen(),
                       ),
                     ),
                   ],

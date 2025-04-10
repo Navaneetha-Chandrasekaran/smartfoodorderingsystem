@@ -9,11 +9,12 @@ import 'package:pinput/pinput.dart';
 
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
+import '../../../models/error_dialog.dart';
 import '../../../models/titles.dart';
 import '../../../services/auth/otp_auth.dart';
 
 class OtpScreen extends StatefulWidget {
-  final String email; // ✅ Store Email for Verification
+  final String email;
 
   const OtpScreen({super.key, required this.email});
 
@@ -22,7 +23,7 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  final OtpService _otpService = OtpService(); // ✅ Initialize OtpService
+  final OtpService _otpService = OtpService();
   final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
   bool isButtonDisabled = false;
@@ -36,7 +37,7 @@ class _OtpScreenState extends State<OtpScreen> {
     super.dispose();
   }
 
-  /// ✅ **Start Resend Timer**
+  /// ✅ Resend Timer
   void startTimer() {
     setState(() {
       isButtonDisabled = true;
@@ -55,12 +56,16 @@ class _OtpScreenState extends State<OtpScreen> {
     });
   }
 
-  /// ✅ **Handle OTP Verification**
+  /// ✅ OTP Verification
   Future<void> _handleVerifyOtp() async {
     final otp = _otpController.text.trim();
 
     if (otp.isEmpty || otp.length < 4) {
-      _showSnackBar("⚠️ Enter a valid 4-digit OTP.");
+      ErrorDialog.show(
+        context,
+        title: "Invalid OTP",
+        message: "⚠️ Please enter a valid 4-digit OTP.",
+      );
       return;
     }
 
@@ -71,27 +76,26 @@ class _OtpScreenState extends State<OtpScreen> {
     final response = await _otpService.verifyOtp(widget.email, otp);
 
     if (response['success']) {
-      _showSnackBar("✅ OTP Verified Successfully!");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("✅ OTP Verified Successfully!")),
+      );
 
-      /// ✅ **Navigate to Reset Password Screen**
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => UserLoginScreen()),
       );
     } else {
-      _showSnackBar(response['message']);
+      ErrorDialog.show(
+        context,
+        title: "OTP Verification Failed",
+        message: response['message'] ?? "Something went wrong. Try again.",
+        onRetry: _handleVerifyOtp,
+      );
     }
 
     setState(() {
       _isLoading = false;
     });
-  }
-
-  /// ✅ **Show SnackBar Messages**
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
@@ -133,18 +137,17 @@ class _OtpScreenState extends State<OtpScreen> {
             children: [
               SizedBox(height: screenHeight * 0.12),
 
-              /// ✅ **OTP Illustration**
+              /// ✅ OTP Illustration
               Image.asset("assets/otp.png", width: screenWidth * 0.7),
 
               SizedBox(height: screenHeight * 0.05),
 
-              /// ✅ **Title & Description**
               Titles(title: "OTP Verification"),
               SizedBox(height: screenHeight * 0.02),
               Description(description: "Enter the OTP sent to ${widget.email}"),
               SizedBox(height: screenHeight * 0.04),
 
-              /// ✅ **OTP Input Field**
+              /// ✅ OTP Input
               Center(
                 child: Pinput(
                   length: 4,
@@ -165,7 +168,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
               SizedBox(height: screenHeight * 0.05),
 
-              /// ✅ **Resend OTP Section**
+              /// ✅ Resend OTP
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -193,12 +196,12 @@ class _OtpScreenState extends State<OtpScreen> {
 
               SizedBox(height: screenHeight * 0.05),
 
-              /// ✅ **Verify OTP Button**
+              /// ✅ Verify Button
               _isLoading
-                  ? CircularProgressIndicator() // ✅ Show loader while verifying
+                  ? CircularProgressIndicator()
                   : CustomButton(
                       label: "Verify OTP",
-                      onPressed: _handleVerifyOtp, // ✅ Call OTP verification function
+                      onPressed: _handleVerifyOtp,
                       width: double.infinity,
                       height: screenHeight * 0.07,
                       gradientColors: [Color.fromARGB(255, 70, 255, 101), Color(0xFF2FA848)],

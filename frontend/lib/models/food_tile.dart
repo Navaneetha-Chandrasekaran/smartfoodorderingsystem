@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../food.dart';
 import 'constants.dart';
 import 'titles.dart';
@@ -12,13 +13,13 @@ class FoodTile extends StatelessWidget {
   const FoodTile({
     super.key,
     required this.food,
-    required this.onTap, required int availableItems,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-    double imageSize = screenWidth * 0.3;  // Set equal size for the food images
+    double imageSize = screenWidth * 0.3;
 
     return Column(
       children: [
@@ -27,7 +28,7 @@ class FoodTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(15.0),
             child: Container(
-              padding: EdgeInsets.all(12),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -36,21 +37,16 @@ class FoodTile extends StatelessWidget {
                     color: Colors.black.withOpacity(0.1),
                     blurRadius: 8,
                     spreadRadius: 2,
-                    offset: Offset(0, 5),
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
               child: Row(
                 children: [
-                  // ✅ Food Image with equal size
+                  // ✅ Food Image (Asset or Network)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(15),
-                    child: Image.asset(
-                      food.image,
-                      width: imageSize,
-                      height: imageSize,  // Make sure the height is equal to the width
-                      fit: BoxFit.cover,   // Ensure the image fits correctly
-                    ),
+                    child: _buildImage(food.image, imageSize),
                   ),
                   SizedBox(width: screenWidth * 0.07),
 
@@ -64,9 +60,11 @@ class FoodTile extends StatelessWidget {
                         SizedBox(height: screenWidth * 0.03),
                         FoodDescription(description: food.description),
 
-                        // ✅ Available Quantity Display
                         SizedBox(height: screenWidth * 0.03),
-                        FoodDescription(description: 'Available: ${food.availableQuantity}', color: secondaryColor),
+                        FoodDescription(
+                          description: 'Available: ${food.availableQuantity}',
+                          color: secondaryColor,
+                        ),
                       ],
                     ),
                   ),
@@ -76,9 +74,29 @@ class FoodTile extends StatelessWidget {
           ),
         ),
 
-        // ✅ Divider line:
+        // ✅ Divider for spacing
         const Divider(color: Colors.transparent, endIndent: 25, indent: 25),
       ],
     );
   }
+
+  /// ✅ Handle both asset and network images
+    Widget _buildImage(String imagePath, double size) {
+    // Load image base URL and remove trailing '/api' if it exists
+    String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+    if (baseUrl.endsWith('/api')) {
+      baseUrl = baseUrl.replaceFirst('/api', '');
+    }
+
+    final String fullImageUrl = '$baseUrl/uploads/$imagePath';
+
+    return Image.network(
+      fullImageUrl,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40),
+    );
+  }
+
 }

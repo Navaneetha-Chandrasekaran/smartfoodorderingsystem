@@ -1,10 +1,16 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+
 import '../../../models/constants.dart';
+import '../../../models/error_dialog.dart';
+import '../../../models/shop.dart';
 import '../../../models/titles.dart';
 import '../../../sheets/navigator.dart';
-import 'isthara/isthara.dart';
+import 'isthara_screen.dart';
 import 'notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -15,13 +21,45 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late Future<List<Shop>> _futureShops;
+
+  @override
+  void initState() {
+    super.initState();
+    _futureShops = fetchShops();
+  }
+
+  Future<List<Shop>> fetchShops() async {
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+    if (baseUrl.isEmpty) throw Exception("API_BASE_URL not set in .env");
+
+    final url = Uri.parse('$baseUrl/shop/get-shops');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final List<dynamic> shopsJson = data['shops'];
+      final shops = shopsJson.map((json) => Shop.fromJson(json)).toList();
+      shops.sort((a, b) => b.isOpen.toString().compareTo(a.isOpen.toString()));
+      return shops;
+    } else {
+      throw Exception('Failed to load shops');
+    }
+  }
+
+  void _retryFetch() {
+    setState(() {
+      _futureShops = fetchShops();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     double sw = MediaQuery.of(context).size.width;
     double sh = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      backgroundColor: Colors.grey[100], // ✅ Softer background
+      backgroundColor: Colors.grey[100],
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(sh * 0.3),
         child: AppBar(
@@ -42,7 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
           flexibleSpace: Stack(
             children: [
-              // ✅ Gradient Background with Shadow
               Container(
                 decoration: BoxDecoration(
                   gradient: primaryColor,
@@ -59,7 +96,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              // ✅ Content inside AppBar
               Positioned(
                 bottom: 15,
                 left: 20,
@@ -85,31 +121,53 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Center(
-          child: Column(
-            children: [
-              SizedBox(height: sh * 0.02),
-              SubTitles(title: 'Dish Up Your Cravings!'),
-              SizedBox(height: sh * 0.04),
-          
-              // ✅ Using Shops Component from Constants
-              Shops(
-                Icon: Image.asset('assets/shop.png'),
-                ShopName: SubTitles(title: 'Isthara', fontSize: sw * 0.04),
-                Status: Image.asset('assets/open.png'),
-                destination: IstharaScreen(),
-              ),
-              SizedBox(height: sh * 0.05),
-              Shops(
-                Icon: Image.asset('assets/shop.png'),
-                ShopName: SubTitles(title: 'Brown\nFening', fontSize: sw * 0.04),
-                Status: Image.asset('assets/close.png'),
-              ),
-            ],
-          ),
+        child: FutureBuilder<List<Shop>>(
+          future: _futureShops,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (snapshot.hasError) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                ErrorDialog.show(
+                  context,
+                  title: "Shop Load Failed",
+                  message: snapshot.error.toString(),
+                  onRetry: _retryFetch,
+                );
+              });
+              return const SizedBox(); // Return empty widget to prevent build issues
+            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text("No shops available"));
+            }
+
+            final shops = snapshot.data!;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: sh * 0.02),
+                SubTitles(title: 'Dish Up Your Cravings!'),
+                SizedBox(height: sh * 0.04),
+                ...shops.map((shop) {
+                  return Center(
+                    child: Shops(
+                      icon: Image.asset('assets/shop.png', width: sw * 0.08, height: sh * 0.08),
+                      shopName: SubTitles(title: shop.name, fontSize: sw * 0.04),
+                      status: Image.asset(
+                        shop.isOpen ? 'assets/open.png' : 'assets/close.png',
+                        width: sw * 0.18,
+                        height: sh * 0.18,
+                      ),
+                      destination: shop.name.toLowerCase() == 'isthara'
+                          ? const IstharaScreen()
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ],
+            );
+          },
         ),
       ),
     );

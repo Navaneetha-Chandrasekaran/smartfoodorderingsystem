@@ -1,12 +1,14 @@
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  final String baseUrl = 'http://10.0.2.2:3000/api/auth'; // ✅ Use `10.0.2.2` for Android Emulator
 
   /// ✅ **User Login**
   Future<Map<String, dynamic>> loginUser(String email, String password) async {
-    final url = Uri.parse('$baseUrl/login');
+    final String baseUrl = dotenv.env['API_BASE_URL']!;
+    final String loginUrl = '$baseUrl/auth/login';
+    final Uri url = Uri.parse(loginUrl);
 
     try {
       print("🔗 Connecting to API: $url"); // Debugging log
