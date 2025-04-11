@@ -150,7 +150,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 SubTitles(title: 'Dish Up Your Cravings!'),
                 SizedBox(height: sh * 0.04),
                 ...shops.map((shop) {
-                  return Center(
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 20.0),
                     child: Shops(
                       icon: Image.asset('assets/shop.png', width: sw * 0.08, height: sh * 0.08),
                       shopName: SubTitles(title: shop.name, fontSize: sw * 0.04),

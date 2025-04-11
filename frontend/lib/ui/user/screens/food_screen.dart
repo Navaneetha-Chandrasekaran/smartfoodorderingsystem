@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 
+import 'package:bitetimenew/services/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/buttons.dart';
@@ -67,7 +68,7 @@ class _FoodScreenState extends State<FoodScreen> {
                       bottomLeft: Radius.circular(30),
                       bottomRight: Radius.circular(30),
                     ),
-                    child: Image.asset(widget.food.image, fit: BoxFit.cover),
+                    child: Image.network(getFullImageUrl(widget.food.image), fit: BoxFit.cover),
                   ),
                 ),
                 Positioned(

@@ -1,7 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
+import 'package:bitetimenew/services/utils.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../food.dart';
 import 'constants.dart';
 import 'titles.dart';
@@ -82,13 +82,8 @@ class FoodTile extends StatelessWidget {
 
   /// ✅ Handle both asset and network images
     Widget _buildImage(String imagePath, double size) {
-    // Load image base URL and remove trailing '/api' if it exists
-    String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
-    if (baseUrl.endsWith('/api')) {
-      baseUrl = baseUrl.replaceFirst('/api', '');
-    }
 
-    final String fullImageUrl = '$baseUrl/uploads/$imagePath';
+    final String fullImageUrl = getFullImageUrl(imagePath);
 
     return Image.network(
       fullImageUrl,

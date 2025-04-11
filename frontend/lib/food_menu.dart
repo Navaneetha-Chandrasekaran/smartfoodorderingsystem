@@ -43,7 +43,10 @@ class Order {
 }
 
 class FoodMenu extends ChangeNotifier {
+  List<Food> _rawMenu = [];
   List<Food> _menu = [];
+  String? _currentTypeFilter;
+
   final List<CartItem> _cart = [];
   final List<Order> _orders = [];
   List<CartItem> _lastOrderedItems = [];
@@ -220,47 +223,54 @@ class FoodMenu extends ChangeNotifier {
 
   // Fetch food menu from backend
 
-  Future<void> fetchMenuFromBackend({
-    FoodCategory? category,
-    bool showVegOnly = false,
-    bool showNonVegOnly = false,
-  }) async {
+Future<void> fetchMenuFromBackend({FoodCategory? category, String? type}) async {
     try {
-      final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api';
+      final categoryStr = category?.name.toLowerCase() ?? 'lunch';
+      final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
+      final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
+      final path = '/api/food/getfoods';
 
-      //Build query parameters dynamically:
       final queryParams = {
-        'shop_id' : '1',
-        if(category != null) 'category': category.name,
+        'shop_id': '1',
+        'category': categoryStr,
+        if (type != null) 'type': type.replaceAll(' ', '_').toLowerCase(),
       };
 
-      //Ensure only one of veg or non-veg is passed:
-      if(showVegOnly && !showNonVegOnly){
-        queryParams['type'] = 'veg';
-      } else if (showNonVegOnly && !showVegOnly){
-        queryParams['type'] = 'non-veg';
-      }
-
-      final uri = Uri.parse('$baseUrl/food/stocks').replace(queryParameters: queryParams);
-      debugPrint('Fetching menu from: $uri');
+      final uri = isSecure
+          ? Uri.https(host, path, queryParams)
+          : Uri.http(host, path, queryParams);
 
       final response = await http.get(uri);
 
-      if(response.statusCode == 200){
+      if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        _menu = [];
-
-        _menu = data.map((item) => Food.fromJson(item)).toList();
-        notifyListeners();
+        _rawMenu = data.map((item) => Food.fromJson(item)).toList();
+        _currentTypeFilter = type;
+        _applyFilter();
       } else {
-        debugPrint('Failed to load menu: ${response.statusCode}');
+        debugPrint('❌ Failed to load menu: ${response.statusCode}');
       }
-    }
-    catch(e){
-      debugPrint('Error fetching food menu: $e');
+    } catch (e) {
+      debugPrint('🚨 Error fetching food menu: $e');
     }
   }
 
+  void _applyFilter() {
+    debugPrint('🔍 Applying filter: $_currentTypeFilter with ${_rawMenu.length} items');
+    if (_currentTypeFilter == 'veg') {
+      _menu = _rawMenu.where((f) => f.isVeg).toList();
+    } else if (_currentTypeFilter == 'non veg') {
+      _menu = _rawMenu.where((f) => !f.isVeg).toList();
+    } else {
+      _menu = List.from(_rawMenu);
+    }
+    debugPrint('📋 Filtered menu length: ${_menu.length}');
+    notifyListeners();
+  }
 
 
+  void updateFilter(String? type) {
+    _currentTypeFilter = type?.toLowerCase().replaceAll('_', ' ');
+    _applyFilter();
+  }
 }

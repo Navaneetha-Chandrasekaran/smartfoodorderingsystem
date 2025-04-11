@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../food.dart';
 import '../../../food_menu.dart';
 import '../../../models/drawer.dart';
@@ -9,8 +8,9 @@ import '../../../models/food_tile.dart';
 import '../../../models/sliver_appbar.dart';
 import '../../../models/tab_bar.dart';
 import '../../../models/titles.dart';
-import '../../../sheets/navigator.dart';
 import 'food_screen.dart';
+
+enum FoodTypeFilter { all, veg, nonVeg }
 
 class IstharaScreen extends StatefulWidget {
   const IstharaScreen({super.key});
@@ -21,99 +21,110 @@ class IstharaScreen extends StatefulWidget {
 
 class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _showVegOnly = false;
-  bool _showNonVegOnly = false;
+  FoodTypeFilter _filter = FoodTypeFilter.all;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: FoodCategory.values.length, vsync: this);
-    _retryFetch();
+    _tabController.addListener(_handleTabChange);
+    _retryFetch(); // Initial load
   }
 
-  Future<void> _retryFetch() async {
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) return;
+    _retryFetch(
+      category: FoodCategory.values[_tabController.index],
+      type: _currentFilterType,
+    );
+  }
+
+  String? get _currentFilterType {
+    switch (_filter) {
+      case FoodTypeFilter.veg:
+        return 'veg';
+      case FoodTypeFilter.nonVeg:
+        return 'non_veg';
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _retryFetch({FoodCategory? category, String? type}) async {
     try {
-      await Provider.of<FoodMenu>(context, listen: false).fetchMenuFromBackend(
-        showVegOnly: _showVegOnly,
-        showNonVegOnly: _showNonVegOnly,
-      );
+      await Provider.of<FoodMenu>(context, listen: false)
+          .fetchMenuFromBackend(category: category, type: type);
     } catch (e) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ErrorDialog.show(
           context,
           title: "Menu Load Failed",
           message: e.toString(),
-          onRetry: _retryFetch,
+          onRetry: () => _retryFetch(category: category, type: type),
         );
       });
     }
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  void _toggleVeg() {
+    setState(() {
+      _filter = _filter == FoodTypeFilter.veg ? FoodTypeFilter.all : FoodTypeFilter.veg;
+    });
+    _retryFetch(
+      category: FoodCategory.values[_tabController.index],
+      type: _currentFilterType,
+    );
   }
 
-  // ✅ Removed local veg/non-veg filtering
-  List<Food> _filterMenuByCategory(FoodCategory category, List<Food> fullMenu) {
-    return fullMenu.where((food) => food.category == category).toList();
+  void _toggleNonVeg() {
+    setState(() {
+      _filter = _filter == FoodTypeFilter.nonVeg ? FoodTypeFilter.all : FoodTypeFilter.nonVeg;
+    });
+    _retryFetch(
+      category: FoodCategory.values[_tabController.index],
+      type: _currentFilterType,
+    );
   }
 
-  List<Widget> getFoodInCategory(List<Food> fullMenu) {
+  List<Widget> getFoodInCategory(List<Food> menu) {
     return FoodCategory.values.map((category) {
-      final categoryMenu = _filterMenuByCategory(category, fullMenu);
+      final categoryItems = menu.where((food) => food.category == category).toList();
 
-      return categoryMenu.isEmpty
+      return categoryItems.isEmpty
           ? const Center(child: Text("No items in this category"))
           : Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.all(8),
               child: RefreshIndicator(
-                onRefresh: () => Provider.of<FoodMenu>(context, listen: false)
-                    .fetchMenuFromBackend(
-                      category: category,
-                      showVegOnly: _showVegOnly,
-                      showNonVegOnly: _showNonVegOnly,
-                    ),
+                onRefresh: () => _retryFetch(
+                  category: category,
+                  type: _currentFilterType,
+                ),
                 child: ListView.builder(
-                  key: ValueKey('${category.name}_${_showVegOnly}_$_showNonVegOnly}'),
-                  itemCount: categoryMenu.length,
-                  itemBuilder: (context, index) {
-                    final food = categoryMenu[index];
-                    return FoodTile(
-                      food: food,
-                      onTap: () => Navigation.navigateTo(
-                        context,
-                        FoodScreen(food: food),
-                      ),
-                    );
-                  },
+                  key: ValueKey('${category.name}_${_filter.name}'),
+                  itemCount: categoryItems.length,
+                  itemBuilder: (_, i) => FoodTile(
+                    food: categoryItems[i],
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => FoodScreen(food: categoryItems[i])),
+                    )
+                  ),
                 ),
               ),
             );
     }).toList();
   }
 
-  void _toggleVeg() async {
-    setState(() {
-      _showVegOnly = !_showVegOnly;
-      if (_showVegOnly) _showNonVegOnly = false;
-    });
-    await _retryFetch();
-  }
-
-  void _toggleNonVeg() async {
-    setState(() {
-      _showNonVegOnly = !_showNonVegOnly;
-      if (_showNonVegOnly) _showVegOnly = false;
-    });
-    await _retryFetch();
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: SideDrawer(),
+      drawer: const SideDrawer(),
       body: Column(
         children: [
           Expanded(
@@ -122,33 +133,30 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
               transitionBuilder: (child, animation) =>
                   FadeTransition(opacity: animation, child: child),
               child: NestedScrollView(
-                key: ValueKey<bool>(_showVegOnly || _showNonVegOnly),
-                headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                key: ValueKey<FoodTypeFilter>(_filter),
+                headerSliverBuilder: (_, __) => [
                   MySliverAppBar(
-                    child: const Text(''),
                     title: const SubTitles(title: 'Isthara'),
+                    child: const Text(''),
                     bottom: PreferredSize(
                       preferredSize: const Size.fromHeight(40),
                       child: MyTabBar(tabController: _tabController),
                     ),
-                    showVegOnly: _showVegOnly,
-                    showNonVegOnly: _showNonVegOnly,
+                    showVegOnly: _filter == FoodTypeFilter.veg,
+                    showNonVegOnly: _filter == FoodTypeFilter.nonVeg,
                     onToggle: _toggleVeg,
                     onNonVegToggle: _toggleNonVeg,
                   ),
                 ],
                 body: Consumer<FoodMenu>(
                   builder: (context, foodMenu, _) {
-                    final allMenu = foodMenu.menu;
-
-                    if (allMenu.isEmpty) {
-                      return const Center(child: Text("Menu is empty"));
-                    }
-
-                    return TabBarView(
-                      controller: _tabController,
-                      children: getFoodInCategory(allMenu),
-                    );
+                    final menu = foodMenu.menu;
+                    return menu.isEmpty
+                        ? const Center(child: Text("Menu is empty"))
+                        : TabBarView(
+                            controller: _tabController,
+                            children: getFoodInCategory(menu),
+                          );
                   },
                 ),
               ),

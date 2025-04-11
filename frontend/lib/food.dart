@@ -41,7 +41,6 @@ class Food {
   int availableQuantity;
   List<Addon> availableAddons;
   final bool isVeg;
-  final String type; // Newly added for display/editing
 
   Food({
     required this.name,
@@ -52,7 +51,6 @@ class Food {
     required this.availableQuantity,
     required this.availableAddons,
     required this.isVeg,
-    required this.type,
   });
 
   static FoodCategory _parseCategory(String? value) {
@@ -64,32 +62,28 @@ class Food {
   }
 
   static bool _parseIsVeg(dynamic value) {
-    if (value is bool) return value;
     if (value is String) {
       final normalized = value.toLowerCase().trim();
-      return normalized == 'true' ||
-          normalized == 'yes' ||
-          normalized == '1' ||
-          normalized == 'veg';
+      return ['true', 'yes', '1', 'veg'].contains(normalized);
     }
+    if (value is bool) return value;
     if (value is int) return value == 1;
-    return false; // safer fallback
+    return true;
   }
 
+
   factory Food.fromJson(Map<String, dynamic> json) {
-    final typeValue = json['type']?.toString().toLowerCase().trim() ?? 'veg';
     return Food(
       name: json['name'] ?? 'Unnamed',
       description: json['description'] ?? '',
       image: json['image'] ?? '',
       price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
       category: _parseCategory(json['category']),
-      availableQuantity: int.tryParse(json['availability']?.toString() ?? '0') ?? 0,
+      availableQuantity: json['availability'] ?? 0,
       availableAddons: (json['availableAddons'] as List<dynamic>? ?? [])
           .map((addon) => Addon.fromJson(addon))
           .toList(),
-      isVeg: _parseIsVeg(typeValue),
-      type: typeValue,
+      isVeg: _parseIsVeg(json['type']),
     );
   }
 
@@ -102,6 +96,5 @@ class Food {
         'availableQuantity': availableQuantity,
         'availableAddons': availableAddons.map((a) => a.toJson()).toList(),
         'isVeg': isVeg,
-        'type': type,
       };
 }

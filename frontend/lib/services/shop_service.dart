@@ -14,7 +14,7 @@ class ShopService {
         final data = jsonDecode(response.body);
         final shops = data['shops'] as List;
         return shops.map((shop) => Shop.fromJson(shop)).toList();
-      } else {
+      } else {  
         throw Exception('Failed to load shops');
       }
     } catch (e) {
