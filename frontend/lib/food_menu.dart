@@ -85,16 +85,15 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addToCart(Food food, List<Addon> selectedAddons) {
+  void addToCart(Food food, /*List<Addon> selectedAddons*/) {
     if (food.availableQuantity > 0) {
       CartItem? cartItem = _cart.firstWhereOrNull(
-        (item) => item.food == food && _areAddonsEqual(item.selectedAddons, selectedAddons),
-      );
+        (item) => item.food == food /*&& _areAddonsEqual(item.selectedAddons, selectedAddons ),*/);
 
       if (cartItem != null) {
         cartItem.quantity++;
       } else {
-        _cart.add(CartItem(food: food, selectedAddons: selectedAddons, quantity: 1));
+        _cart.add(CartItem(food: food, /*selectedAddons: selectedAddons, quantity: 1*/));
       }
 
       food.availableQuantity--;
@@ -202,6 +201,14 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateFood(Food updatedFood) {
+    int index = _menu.indexWhere((food) => food.id == updatedFood.id);
+    if (index != -1) {
+      _menu[index] = updatedFood;  // Update the food in the list
+      notifyListeners();  // Notify listeners to rebuild the UI
+    }
+  }
+
   void clearOrders() {
     _upcomingOrders.clear();
     _completedOrders.clear();
@@ -214,16 +221,16 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _areAddonsEqual(List<Addon> list1, List<Addon> list2) {
-    return const DeepCollectionEquality().equals(
-      list1.map((e) => e.name).toList(),
-      list2.map((e) => e.name).toList(),
-    );
-  }
+  // bool _areAddonsEqual(List<Addon> list1, List<Addon> list2) {
+  //   return const DeepCollectionEquality().equals(
+  //     list1.map((e) => e.name).toList(),
+  //     list2.map((e) => e.name).toList(),
+  //   );
+  // }
 
   // Fetch food menu from backend
 
-Future<void> fetchMenuFromBackend({FoodCategory? category, String? type}) async {
+Future<void> fetchMenuFromBackend({FoodCategory? category, String? type, required int shopId}) async {
     try {
       final categoryStr = category?.name.toLowerCase() ?? 'lunch';
       final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
@@ -231,7 +238,7 @@ Future<void> fetchMenuFromBackend({FoodCategory? category, String? type}) async 
       final path = '/api/food/getfoods';
 
       final queryParams = {
-        'shop_id': '1',
+        'shop_id': shopId.toString(),
         'category': categoryStr,
         if (type != null) 'type': type.replaceAll(' ', '_').toLowerCase(),
       };

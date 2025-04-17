@@ -1,11 +1,10 @@
-// ignore_for_file: deprecated_member_use
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import '../../../models/buttons.dart';
 import '../../../models/constants.dart';
+import '../../../models/error_dialog.dart';
 import '../../../models/titles.dart';
+import '../../../services/auth/login_auth.dart'; // Import your login service
 import '../sheets/navbar.dart';
 import 'signup_screen.dart';
 
@@ -13,13 +12,15 @@ class CanteenLoginScreen extends StatefulWidget {
   const CanteenLoginScreen({super.key});
 
   @override
-  State<CanteenLoginScreen> createState() => CanteenrLoginScreenState();
+  State<CanteenLoginScreen> createState() => _CanteenLoginScreenState();
 }
 
-class CanteenrLoginScreenState extends State<CanteenLoginScreen> {
+class _CanteenLoginScreenState extends State<CanteenLoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();  // AuthService for login
 
   @override
   void dispose() {
@@ -32,6 +33,96 @@ class CanteenrLoginScreenState extends State<CanteenLoginScreen> {
     setState(() {
       _isPasswordVisible = !_isPasswordVisible;
     });
+  }
+
+  /// ✅ **Handle Login**
+  Future<void> _handleLogin() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ErrorDialog.show(
+        context,
+        title: "Missing Fields",
+        message: "⚠️ Please enter email and password.",
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      print("⏳ Sending login request...");
+      final response = await _authService.loginUser(email, password);
+      print("✅ API Response: $response");
+
+      if (response['success']) {
+        print("🎉 Login Successful");
+
+        // ✅ Delay navigation to avoid UI issues
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const CanteenNavBar()),
+            );
+          }
+        });
+
+        _showSuccessDialog("Login Successful", "✅ Welcome back!");
+      } else {
+        print("❌ Login Failed: ${response['message']}");
+        ErrorDialog.show(
+          context,
+          title: "Login Failed",
+          message: response['message'] ?? "Something went wrong",
+          onRetry: _handleLogin,
+        );
+      }
+    } catch (e) {
+      print("🚨 Error during login: $e");
+      ErrorDialog.show(
+        context,
+        title: "Error",
+        message: "🚨 Login failed: $e",
+        onRetry: _handleLogin,
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// ✅ **Show Success Dialog**
+  void _showSuccessDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -116,17 +207,16 @@ class CanteenrLoginScreenState extends State<CanteenLoginScreen> {
                     SizedBox(height: screenHeight * 0.015),
 
                     /// ✅ **Login Button**
-                    /// ✅ **Login Button**
-                    CustomButton(
-                      label: "Login",
-                      destination: CanteenNavBar(),
-                      labelColor: Colors.white,
-                      width: double.infinity,
-                      height: screenHeight * 0.07,
-                      icon: Icons.arrow_forward, // ✅ Icon on the right
-                    ),
-
-
+                    _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : CustomButton(
+                            label: "Login",
+                            onPressed: _handleLogin,
+                            labelColor: Colors.white,
+                            width: double.infinity,
+                            height: screenHeight * 0.07,
+                            icon: Icons.arrow_forward, // ✅ Icon on the right
+                          ),
 
                     SizedBox(height: screenHeight * 0.03),
 

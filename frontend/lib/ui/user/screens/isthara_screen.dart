@@ -53,7 +53,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
   Future<void> _retryFetch({FoodCategory? category, String? type}) async {
     try {
       await Provider.of<FoodMenu>(context, listen: false)
-          .fetchMenuFromBackend(category: category, type: type);
+          .fetchMenuFromBackend(category: category, type: type, shopId: 2);
     } catch (e) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ErrorDialog.show(

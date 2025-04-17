@@ -421,7 +421,7 @@
       items: [
         CartItem(
           food: randomFood,
-          selectedAddons: [],
+          // selectedAddons: [],
           quantity: Random().nextInt(3) + 1,
           otp: (1000 + Random().nextInt(9000)).toString(),
           paymentMode: Random().nextBool() ? "Cash" : "GPay",

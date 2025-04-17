@@ -6,10 +6,10 @@ import '../food.dart';
 class FoodService {
   final String _baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:5000/api';
 
-  Future<List<Food>> fetchFoodItems({int? shopId, String? category, String? type}) async {
+  Future<List<Food>> fetchFoodItems({required int shopId, String? category, String? type}) async {
     try {
       Uri uri = Uri.parse("$_baseUrl/food/getfoods").replace(queryParameters: {
-        if (shopId != null) 'shop_id': shopId.toString(),
+        'shop_id': shopId.toString(),
         if (category != null) 'category': category,
         if (type != null) 'type': type,
       });
@@ -27,6 +27,7 @@ class FoodService {
     }
   }
 
+
   Map<String, dynamic> _convertJson(Map<String, dynamic> json) {
     return {
       'name': json['name'],
@@ -34,9 +35,9 @@ class FoodService {
       'image': json['image'],
       'price': json['price'],
       'category': json['category'],
-      'availableQuantity': 10,
+      'availability': json['availability'], // Updated to reflect availability from backend
       'availableAddons': [],
-      'type': json['type'], // ✅ FIXED HERE: Pass the backend 'type' key directly
+      'type': json['type'], // ✅ Pass the backend 'type' key directly
     };
   }
 }

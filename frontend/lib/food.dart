@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum FoodCategory {
   breakfast,
   lunch,
@@ -5,58 +7,32 @@ enum FoodCategory {
   beverages,
 }
 
-enum SpiceLevel { none, medium, full }
-
-class Addon {
-  final String name;
-  final SpiceLevel spiceLevel;
-
-  Addon({
-    required this.name,
-    SpiceLevel? spiceLevel,
-  }) : spiceLevel = spiceLevel ?? SpiceLevel.none;
-
-  factory Addon.fromJson(Map<String, dynamic> json) {
-    return Addon(
-      name: json['name'] ?? 'Unnamed Addon',
-      spiceLevel: SpiceLevel.values.firstWhere(
-        (e) => e.toString().split('.').last.toLowerCase() == (json['spiceLevel']?.toLowerCase() ?? ''),
-        orElse: () => SpiceLevel.none,
-      ),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'spiceLevel': spiceLevel.toString().split('.').last,
-      };
-}
-
 class Food {
+  final int id;
   final String name;
   final String description;
   final String image;
   final double price;
   final FoodCategory category;
   int availableQuantity;
-  List<Addon> availableAddons;
   final bool isVeg;
 
   Food({
+    required this.id,
     required this.name,
     required this.description,
     required this.image,
     required this.price,
     required this.category,
     required this.availableQuantity,
-    required this.availableAddons,
     required this.isVeg,
   });
 
   static FoodCategory _parseCategory(String? value) {
     final normalized = value?.toLowerCase().trim() ?? '';
+    debugPrint('Parsing category: "$normalized"');
     return FoodCategory.values.firstWhere(
-      (c) => c.name == normalized,
+      (c) => c.name.toLowerCase() == normalized,
       orElse: () => FoodCategory.breakfast,
     );
   }
@@ -71,30 +47,64 @@ class Food {
     return true;
   }
 
-
   factory Food.fromJson(Map<String, dynamic> json) {
     return Food(
-      name: json['name'] ?? 'Unnamed',
+      id: json['food_id'],
+      name: json['name'] ?? '',
       description: json['description'] ?? '',
       image: json['image'] ?? '',
       price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
-      category: _parseCategory(json['category']),
-      availableQuantity: json['availability'] ?? 0,
-      availableAddons: (json['availableAddons'] as List<dynamic>? ?? [])
-          .map((addon) => Addon.fromJson(addon))
-          .toList(),
-      isVeg: _parseIsVeg(json['type']),
+      category: Food._parseCategory(json['category']),
+      availableQuantity: int.tryParse(json['availability']?.toString() ?? '0') ?? 0,
+      isVeg: Food._parseIsVeg(json['type']),
     );
   }
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'name': name,
         'description': description,
         'image': image,
         'price': price,
         'category': category.name,
         'availableQuantity': availableQuantity,
-        'availableAddons': availableAddons.map((a) => a.toJson()).toList(),
         'isVeg': isVeg,
       };
+
+  Food copyWith({
+    int? id,
+    String? name,
+    String? description,
+    String? image,
+    double? price,
+    FoodCategory? category,
+    int? availableQuantity,
+    bool? isVeg,
+  }) {
+    return Food(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      image: image ?? this.image,
+      price: price ?? this.price,
+      category: category ?? this.category,
+      availableQuantity: availableQuantity ?? this.availableQuantity,
+      isVeg: isVeg ?? this.isVeg,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'Food(id: $id, name: $name)';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Food &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

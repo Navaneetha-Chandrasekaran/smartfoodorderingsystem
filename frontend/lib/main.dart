@@ -1,5 +1,8 @@
+import 'package:bitetimenew/ui/canteen/screens/login_screen.dart';
 import 'package:bitetimenew/ui/canteen/screens/profile_screen.dart';
 import 'package:bitetimenew/ui/canteen/sheets/navbar.dart';
+import 'package:bitetimenew/ui/user/screens/cart_screen.dart';
+import 'package:bitetimenew/ui/user/screens/isthara_screen.dart';
 import 'package:bitetimenew/ui/user/screens/login_screen.dart';
 import 'package:bitetimenew/ui/user/screens/onboard_screen.dart';
 import 'package:bitetimenew/ui/user/sheets/navbar.dart';
@@ -36,6 +39,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (context) => ThemeProvider()),
         ChangeNotifierProvider(create: (context) => FoodMenu()),
+        
       ],
       child: const MyApp(),
     ),
@@ -49,8 +53,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: CustomNavBar(), // ✅ Entry screen
+      home: UserLoginScreen(), // ✅ Entry screen
       theme: Provider.of<ThemeProvider>(context).themeData,
+
+      routes: {
+        '/cart': (context) => const CartScreen()
+      },
     );
   }
 }

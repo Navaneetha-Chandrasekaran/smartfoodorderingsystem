@@ -1,8 +1,6 @@
-// ignore_for_file: deprecated_member_use
-
-import 'package:bitetimenew/services/utils.dart';
 import 'package:flutter/material.dart';
 import '../food.dart';
+import '../services/utils.dart';
 import 'constants.dart';
 import 'titles.dart';
 
@@ -81,8 +79,7 @@ class FoodTile extends StatelessWidget {
   }
 
   /// ✅ Handle both asset and network images
-    Widget _buildImage(String imagePath, double size) {
-
+  Widget _buildImage(String imagePath, double size) {
     final String fullImageUrl = getFullImageUrl(imagePath);
 
     return Image.network(
@@ -93,5 +90,4 @@ class FoodTile extends StatelessWidget {
       errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40),
     );
   }
-
 }

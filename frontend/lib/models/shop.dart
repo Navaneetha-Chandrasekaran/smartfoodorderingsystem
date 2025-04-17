@@ -16,15 +16,11 @@ class Shop {
   });
 
   factory Shop.fromJson(Map<String, dynamic> json) {
-    try {
-      return Shop(
-        id: json['id']?.toString() ?? '',
-        name: json['name'] ?? 'Unnamed Shop',
-        isOpen: json['isOpen'] == true,
-      );
-    } catch (e) {
-      throw Exception('Error parsing shop: $e');
-    }
+    return Shop(
+      id: json['id'].toString(),
+      name: json['name'] ?? 'Unnamed Shop',
+      isOpen: json['isOpen'] == true,
+    );
   }
 }
 
@@ -59,7 +55,6 @@ class _ShopListScreenState extends State<ShopListScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            debugPrint("Error fetching shops: ${snapshot.error}");
             return Center(child: Text("Error: ${snapshot.error}"));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text("No shops available."));
@@ -74,16 +69,14 @@ class _ShopListScreenState extends State<ShopListScreen> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16.0),
                 child: Shops(
-                  icon: Image.asset('assets/shop.png', width: screenWidth * 0.1, height: screenWidth * 0.1,),
+                  icon: Image.asset('assets/shop.png', width: screenWidth * 0.1, height: screenWidth * 0.1),
                   shopName: SubTitles(title: shop.name),
                   status: Image.asset(
-                    shop.isOpen
-                        ? 'assets/open.png'
-                        : 'assets/close.png',
+                    shop.isOpen ? 'assets/open.png' : 'assets/close.png',
                     width: screenWidth * 0.1,
                     height: screenWidth * 0.1,
                   ),
-                  destination: null, // Can be ShopDetailScreen(shop: shop)
+                  destination: null,
                 ),
               );
             },
