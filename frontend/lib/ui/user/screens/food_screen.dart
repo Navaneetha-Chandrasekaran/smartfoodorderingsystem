@@ -1,370 +1,363 @@
-  import 'dart:async';
-  import 'package:flutter/material.dart';
-  import 'package:provider/provider.dart';
-  import 'package:google_fonts/google_fonts.dart';
-  import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-  import '../../../models/buttons.dart';
-  import '../../../food.dart';
-  import '../../../food_menu.dart';
-  import '../../../models/shop.dart';
-  import '../../../models/titles.dart';
-  import '../../../services/cart_service.dart';
+import '../../../food.dart';
+import '../../../food_menu.dart';
+import '../../../models/shop.dart';
+import '../../../services/auth/login_auth.dart';
+import '../../../services/cart_service.dart';
 import '../../../services/shop_service.dart';
-  import '../../../sheets/navigator.dart';
-  import '../../../services/utils.dart';
+import '../../../sheets/navigator.dart';
+import '../../../services/utils.dart';
 
-  class FoodScreen extends StatefulWidget {
-    final Food food;
-    const FoodScreen({super.key, required this.food});
+class FoodScreen extends StatefulWidget {
+  final Food food;
+  const FoodScreen({super.key, required this.food});
 
-    @override
-    State<FoodScreen> createState() => _FoodScreenState();
+  @override
+  State<FoodScreen> createState() => _FoodScreenState();
+}
+
+class _FoodScreenState extends State<FoodScreen> with TickerProviderStateMixin {
+  String? userName;
+
+  AnimationController? _fadeController;
+  Animation<double>? _fadeAnimation;
+  Animation<Offset>? _slideAnimation;
+  Animation<double>? _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+
+    // Initialize animations
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _fadeController!, curve: Curves.easeIn),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.2),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _fadeController!, curve: Curves.easeOut),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController!, curve: Curves.elasticOut),
+    );
+
+    // Start the animations
+    _fadeController!.forward();
   }
 
-  class _FoodScreenState extends State<FoodScreen> {
-    @override
-    void initState() {
-      super.initState();
+  void _loadUserName() async {
+    final name = await AuthService.getCurrentName();
+    setState(() {
+      userName = name ?? 'Guest';
+    });
+  }
+
+  Future<int?> _getUserId() async {
+    final userId = await AuthService.getCurrentUserId();
+    print("User ID from AuthService: $userId");
+
+    if (userId == null) {
+      Navigator.pushReplacementNamed(context, '/login');
+      throw Exception("User not logged in");
     }
-
-  // void addToCart(Food food) async {
-  //   final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-
-  //   foodMenu.addToCart(food);
-
-  //   final baseUrl = dotenv.env['API_BASE_URL']?.trim();
-  //   if (baseUrl == null || baseUrl.isEmpty) {
-  //     if (mounted) {
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         const SnackBar(content: Text("API base URL not configured")),
-  //       );
-  //     }
-  //     return;
-  //   }
-
-  //   try {
-  //     // Fetch the shop data dynamically
-  //     final shopService = ShopService();
-  //     List<Shop> shops = await shopService.fetchShops();  // This resolves the Future and gives us the list of shops
-
-  //     if (shops.isEmpty) {
-  //       if (mounted) {
-  //         ScaffoldMessenger.of(context).showSnackBar(
-  //           const SnackBar(content: Text("No shops available")),
-  //         );
-  //       }
-  //       return;
-  //     }
-
-  //     // Get the shopId from the first shop or implement logic to select the appropriate shop
-  //     final shopId = shops[0].id; // Use the first shop's ID for now, modify as needed
-
-  //     // Fetch the userId (you can get it from your app's user session or provider)
-  //     final userId = await _getUserId(); // This is a method you'll need to define
-
-  //     final payload = {
-  //       'user_id': userId,  // Assuming you have a method to get the userId dynamically
-  //       'shop_id': shopId.toString(),
-  //       'food_id': food.id,
-  //       'quantity': 1,
-  //     };
-
-  //     showDialog(
-  //       context: context,
-  //       barrierDismissible: false,
-  //       builder: (BuildContext context) => const Center(child: CircularProgressIndicator()),
-  //     );
-
-  //     final response = await http
-  //         .post(
-  //           Uri.parse('$baseUrl/cart/add'),
-  //           headers: {'Content-Type': 'application/json'},
-  //           body: jsonEncode(payload),
-  //         )
-  //         .timeout(const Duration(seconds: 10), onTimeout: () {
-  //       throw TimeoutException("The connection has timed out");
-  //     });
-
-  //     if (mounted) Navigator.of(context, rootNavigator: true).pop();
-
-  //     print("Response status: ${response.statusCode}");
-  //     print("Response body: ${response.body}");  // Print the response body for debugging
-
-  //     if (response.statusCode == 200) {
-  //       if (mounted) {
-  //         showDialog(
-  //           context: context,
-  //           builder: (context) => AddedToCartPopup(food: food),
-  //         );
-  //       }
-  //     } else {
-  //       if (mounted) {
-  //         ScaffoldMessenger.of(context).showSnackBar(
-  //           SnackBar(content: Text("Server error: ${response.body}")),
-  //         );
-  //       }
-  //     }
-  //   } catch (e) {
-  //     if (mounted) {
-  //       Navigator.of(context, rootNavigator: true).maybePop();
-  //       ScaffoldMessenger.of(context).showSnackBar(
-  //         SnackBar(content: Text("Connection error: $e")),
-  //       );
-  //     }
-  //   }
-  // }
+    return userId;
+  }
 
   void addToCart(Food food) async {
-  final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-  foodMenu.addToCart(food);
+    try {
+      final userId = await _getUserId();
 
-  final baseUrl = dotenv.env['API_BASE_URL']?.trim();
-  if (baseUrl == null || baseUrl.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("API base URL not configured")),
-    );
-    return;
-  }
-
-  try {
-    final shopService = ShopService();
-    List<Shop> shops = await shopService.fetchShops();
-
-    if (shops.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No shops available")),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
-      return;
-    }
 
-    final shopId = shops[0].id.toString();
-    final userId = await _getUserId();
+      final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+      foodMenu.addToCart(food);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) => const Center(child: CircularProgressIndicator()),
-    );
+      final baseUrl = dotenv.env['API_BASE_URL']?.trim();
+      if (baseUrl == null || baseUrl.isEmpty) {
+        Navigator.of(context).pop();
+        return;
+      }
 
-    // ✅ Use CartService now
-    final cartService = CartService();
-    final result = await cartService.addToCart(userId, shopId, food.id.toString());
+      final shopService = ShopService();
+      List<Shop> shops = await shopService.fetchShops();
 
-    print("User ID: $userId");
-    print("Shop ID: $shopId");
-    print('Food ID: ${food.id}');
+      final shopId = shops.isNotEmpty ? shops[0].id.toString() : null;
 
-    if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      if (shopId == null) {
+        Navigator.of(context).pop();
+        return;
+      }
 
-    if (result['success']) {
-      if (mounted) {
+      final cartService = CartService();
+      final result = await cartService.addToCart(userId.toString(), shopId, food.id.toString());
+
+      Navigator.of(context).pop();
+
+      if (result['success']) {
         showDialog(
           context: context,
           builder: (context) => AddedToCartPopup(food: food),
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${result['message']}")),
+        );
       }
-    } else {
+    } catch (e) {
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${result['message']}")),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      Navigator.of(context, rootNavigator: true).maybePop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Connection error: $e")),
+        SnackBar(content: Text("Error: $e")),
       );
     }
   }
-}
 
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    double screenWidth = MediaQuery.of(context).size.width;
+    double screenHeight = MediaQuery.of(context).size.height;
 
-  // You can define this method to retrieve the userId dynamically (for example, from an AuthService or a provider)
-  Future<String> _getUserId() async {
-    // Implement your logic here to fetch the userId (from a provider, user session, etc.)
-    // For example, using a provider or AuthService to get the current user ID
-    return ''; // Replace this with actual logic
-  }
-
-
-    @override
-    Widget build(BuildContext context) {
-      double screenWidth = MediaQuery.of(context).size.width;
-      double screenHeight = MediaQuery.of(context).size.height;
-
-      return Scaffold(
-        body: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  SizedBox(
-                    width: screenWidth,
-                    height: screenHeight * 0.4,
-                    child: ClipRRect(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FD),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: screenWidth,
+                  height: screenHeight * 0.42,
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: NetworkImage(getFullImageUrl(widget.food.image)),
+                      fit: BoxFit.cover,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(40),
+                      bottomRight: Radius.circular(40),
+                    ),
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
                       borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(30),
-                        bottomRight: Radius.circular(30),
+                        bottomLeft: Radius.circular(40),
+                        bottomRight: Radius.circular(40),
                       ),
-                      child: Image.network(
-                        getFullImageUrl(widget.food.image),
-                        fit: BoxFit.cover,
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Colors.black.withOpacity(0.5), Colors.transparent],
                       ),
                     ),
                   ),
-                  Positioned(
-                    top: 40,
-                    left: 16,
-                    child: _buildBackButton(),
+                ),
+                Positioned(
+                  top: 50,
+                  left: 20,
+                  child: _buildBackButton(),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (userName != null)
+                    Text(
+                      "Hello, $userName 👋",
+                      style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.grey[800]),
+                    ),
+                  const SizedBox(height: 10),
+                  FadeTransition(
+                    opacity: _fadeAnimation!,
+                    child: SlideTransition(
+                      position: _slideAnimation!,
+                      child: Text(
+                        widget.food.name,
+                        style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FadeTransition(
+                    opacity: _fadeAnimation!,
+                    child: Text(
+                      "₹${widget.food.price}",
+                      style: GoogleFonts.poppins(fontSize: 20, color: Colors.green[700], fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FadeTransition(
+                    opacity: _fadeAnimation!,
+                    child: Text(
+                      widget.food.description,
+                      style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[700]),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  FadeTransition(
+                    opacity: _fadeAnimation!,
+                    child: Center(
+                      child: ScaleTransition(
+                        scale: _scaleAnimation!,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            if (widget.food.availableQuantity > 0) {
+                              addToCart(widget.food);
+                            } else {
+                              showDialog(
+                                context: context,
+                                builder: (context) => const OutOfStockPopup(),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.shopping_cart_outlined),
+                          label: const Text('Add to Cart'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                            backgroundColor: Colors.black87,
+                            foregroundColor: Colors.white,
+                            elevation: 5,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            textStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: screenWidth * 0.03),
-                    FoodName(foodName: widget.food.name),
-                    SizedBox(height: screenWidth * 0.01),
-                    FoodPrice(foodPrice: "₹${widget.food.price}"),
-                    SizedBox(height: screenWidth * 0.02),
-                    FoodDescription(description: widget.food.description),
-                    SizedBox(height: screenWidth * 0.05),
-                    SizedBox(height: 20),
-                    Center(
-                      child: CartButton(
-                        name: 'Add to cart',
-                        onTap: () {
-                          if (widget.food.availableQuantity > 0) {
-                            addToCart(widget.food);
-                          } else {
-                            showDialog(
-                              context: context,
-                              builder: (context) => const OutOfStockPopup(),
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-    }
-
-    Widget _buildBackButton() {
-      return InkWell(
-        onTap: () => Navigation.goBack(context),
-        child: Container(
-          width: 45,
-          height: 45,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.4),
-            borderRadius: BorderRadius.circular(50),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, spreadRadius: 2),
-            ],
-          ),
-          child: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
-        ),
-      );
-    }
+      ),
+    );
   }
 
-  class AddedToCartPopup extends StatelessWidget {
-    final Food food;
-
-    const AddedToCartPopup({super.key, required this.food});
-
-    @override
-    Widget build(BuildContext context) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, spreadRadius: 1),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 60),
-              const SizedBox(height: 10),
-              Text(
-                '${food.name} added to cart!',
-                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close the popup first
-                  Navigator.pushNamed(context, '/cart'); // Then navigate to cart
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+  Widget _buildBackButton() {
+    return GestureDetector(
+      onTap: () => Navigation.goBack(context),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.5),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 3)),
+          ],
         ),
-      );
-    }
+        child: const Center(
+          child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 18),
+        ),
+      ),
+    );
   }
 
-
-  class OutOfStockPopup extends StatelessWidget {
-    const OutOfStockPopup({super.key});
-
-    @override
-    Widget build(BuildContext context) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, spreadRadius: 1),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 60),
-              const SizedBox(height: 10),
-              const Text(
-                'Out of Stock!',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+  @override
+  void dispose() {
+    _fadeController?.dispose();
+    super.dispose();
   }
+}
+
+class AddedToCartPopup extends StatelessWidget {
+  final Food food;
+
+  const AddedToCartPopup({super.key, required this.food});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 12,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.green, size: 64),
+            const SizedBox(height: 12),
+            Text(
+              '${food.name} added to cart!',
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[600],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Great!'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class OutOfStockPopup extends StatelessWidget {
+  const OutOfStockPopup({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 12,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 64),
+            const SizedBox(height: 12),
+            const Text(
+              'Out of Stock!',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

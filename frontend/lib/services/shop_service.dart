@@ -4,13 +4,13 @@ import 'package:http/http.dart' as http;
 import '../models/shop.dart';
 
 class ShopService {
-  final int _shopId = 2; // 👈 Hardcoded shop ID
-
-  int get shopId => _shopId; // 👈 Expose it if needed elsewhere
+  // You can remove the hardcoded value and get the shop ID dynamically from the selected shop
+  Future<int?> getSelectedShopId(Shop selectedShop) async {
+    return int.tryParse(selectedShop.id); // Assuming 'id' is a string, and you want to parse it into an integer
+  }
 
   Future<List<Shop>> fetchShops() async {
     final String baseUrl = dotenv.env['API_BASE_URL']!;
-    // final Uri url = Uri.parse('$baseUrl/shop/get-shops?shop_id=$_shopId');
     final Uri url = Uri.parse('$baseUrl/shop/get-shops'); // 👈 No query param
     print('Request URL: $url');
 
@@ -35,6 +35,5 @@ class ShopService {
       print('Error: $e');  // Log the error if the request fails
       throw Exception('Error fetching shops: $e');
     }
-
   }
 }

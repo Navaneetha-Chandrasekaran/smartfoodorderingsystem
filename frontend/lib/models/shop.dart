@@ -16,13 +16,18 @@ class Shop {
   });
 
   factory Shop.fromJson(Map<String, dynamic> json) {
-    return Shop(
-      id: json['id'].toString(),
-      name: json['name'] ?? 'Unnamed Shop',
-      isOpen: json['isOpen'] == true,
-    );
+    try {
+      return Shop(
+        id: json['id'].toString(),
+        name: json['name'] ?? 'Unnamed Shop',
+        isOpen: json['isOpen'] == true,
+      );
+    } catch (e) {
+      throw Exception('Error parsing shop: $e');
+    }
   }
 }
+
 
 
 

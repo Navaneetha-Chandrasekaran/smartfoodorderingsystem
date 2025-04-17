@@ -85,23 +85,45 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addToCart(Food food, /*List<Addon> selectedAddons*/) {
-    if (food.availableQuantity > 0) {
-      CartItem? cartItem = _cart.firstWhereOrNull(
-        (item) => item.food == food /*&& _areAddonsEqual(item.selectedAddons, selectedAddons ),*/);
+  // void addToCart(Food food, /*List<Addon> selectedAddons*/) {
+  //   if (food.availableQuantity > 0) {
+  //     CartItem? cartItem = _cart.firstWhereOrNull(
+  //       (item) => item.food == food /*&& _areAddonsEqual(item.selectedAddons, selectedAddons ),*/);
 
-      if (cartItem != null) {
-        cartItem.quantity++;
-      } else {
-        _cart.add(CartItem(food: food, /*selectedAddons: selectedAddons, quantity: 1*/));
-      }
+  //     if (cartItem != null) {
+  //       cartItem.quantity++;
+  //     } else {
+  //       _cart.add(CartItem(food: food, /*selectedAddons: selectedAddons, quantity: 1*/));
+  //     }
 
-      food.availableQuantity--;
-      notifyListeners();
+  //     food.availableQuantity--;
+  //     notifyListeners();
+  //   }
+  // }
+
+  void addToCart(Food food /*, List<Addon> selectedAddons*/) {
+  if (food.availableQuantity > 0) {
+    // Check if the item is already in the cart
+    CartItem? cartItem = _cart.firstWhereOrNull(
+      (item) => item.food == food /*&& _areAddonsEqual(item.selectedAddons, selectedAddons )*/,
+    );
+
+    // If the item is in the cart, increase the quantity; otherwise, add the new item to the cart
+    if (cartItem != null) {
+      cartItem.quantity++;
+    } else {
+      _cart.add(CartItem(food: food, /*selectedAddons: selectedAddons, quantity: 1*/));
     }
-  }
 
-  void placeOrder(TimeOfDay? selectedTime) {
+    // Do not change the available quantity here
+    // food.availableQuantity--; // <-- This line is removed
+
+    notifyListeners();
+  }
+}
+
+
+  void placeOrder(TimeOfDay? selectedTime, String? otp, String selectedPayment) {
     if (_cart.isNotEmpty) {
       Order newOrder = Order(
         orderNumber: _nextOrderNumber++,

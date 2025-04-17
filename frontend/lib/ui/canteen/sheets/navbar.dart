@@ -1,9 +1,9 @@
 // ignore_for_file: deprecated_member_use, avoid_print
 
 import 'package:bitetimenew/ui/canteen/screens/stock_screen.dart';
+import 'package:bitetimenew/ui/user/screens/order_screen.dart';
 import 'package:flutter/material.dart';
 import '../screens/canteen_dashboard_screen.dart';
-import '../screens/orders_screen.dart';
 import '../screens/profile_screen.dart';
 
 class CanteenNavBar extends StatefulWidget {
@@ -19,7 +19,7 @@ class _CanteenNavBarState extends State<CanteenNavBar> {
   final List<Widget> _screens = [
     CanteenDashboard(),
     StockManagementScreen(), // ✅ Stock Screen Added
-    OrdersScreen(),
+    OrderScreen(),
     ProfileScreen(),
   ];
 

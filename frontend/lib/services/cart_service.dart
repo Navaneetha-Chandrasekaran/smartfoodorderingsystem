@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+
 class CartService {
   final String baseUrl = dotenv.env['API_BASE_URL']!;
 
@@ -14,8 +15,6 @@ class CartService {
       'shop_id': shopId,
       'food_id': foodId,
     };
-
-    print('Sending payload: $payload');
 
     try {
       final response = await http.post(

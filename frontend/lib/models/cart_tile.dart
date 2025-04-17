@@ -6,7 +6,6 @@ import '../food_menu.dart';
 import '../services/utils.dart';
 import 'buttons.dart';
 import 'cart_item.dart';
-import 'titles.dart';
 
 class CartTile extends StatefulWidget {
   final CartItem cartItem;
@@ -56,7 +55,6 @@ class _CartTileState extends State<CartTile> {
                     errorBuilder: (context, error, stackTrace) => Icon(Icons.image_not_supported, size: screenWidth * 0.2),
                   ),
                 ),
-
                 SizedBox(width: screenWidth * 0.04),
 
                 // ✅ Food Name & Price
@@ -82,7 +80,7 @@ class _CartTileState extends State<CartTile> {
                   food: widget.cartItem.food,
                   quantity: widget.cartItem.quantity,
                   onIncrement: () {
-                    foodMenu.addToCart(widget.cartItem.food, /* widget.cartItem.selectedAddons */);
+                    foodMenu.addToCart(widget.cartItem.food);
                     setState(() {});
                   },
                   onDecrement: () {
@@ -92,85 +90,6 @@ class _CartTileState extends State<CartTile> {
                 ),
               ],
             ),
-
-            SizedBox(height: 8),
-
-            // ✅ Addons Section with Right-Aligned Dropdown
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                FoodPrice(foodPrice: "Selected Addons:"),
-
-                // ✅ Addon Selector (Right Aligned)
-                // if (widget.cartItem.food.availableAddons.isNotEmpty)
-                //   Container(
-                //     width: screenWidth * 0.4,
-                //     padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                //     decoration: BoxDecoration(
-                //       color: secondaryColor,
-                //       borderRadius: BorderRadius.circular(50),
-                //     ),
-                //     child: DropdownButtonHideUnderline(
-                //       child: DropdownButton<Addon>(
-                //         hint: FoodDescription(description: "Select Addon", color: Colors.white),
-                //         isDense: true,
-                //         isExpanded: false,
-                //         icon: Icon(Icons.arrow_drop_down, size: 16, color: Colors.black87),
-                //         dropdownColor: Colors.white,
-                //         style: TextStyle(fontSize: 12, color: Colors.black87),
-                //         elevation: 4,
-                //         items: widget.cartItem.food.availableAddons.map((addon) {
-                //           return DropdownMenuItem<Addon>(
-                //             value: addon,
-                //             child: Row(
-                //               children: [
-                //                 Icon(Icons.add_circle_outline, size: 14, color: Colors.green),
-                //                 SizedBox(width: screenWidth * 0.07),
-                //                 FoodPrice(foodPrice: addon.name),
-                //               ],
-                //             ),
-                //           );
-                //         }).toList(),
-                //         onChanged: (newAddon) {
-                //           setState(() {
-                //             // ✅ If the selected addon is a spice level, ensure only one is selected
-                //             if (newAddon!.spiceLevel != SpiceLevel.none) {
-                //               widget.cartItem.selectedAddons.removeWhere(
-                //                   (addon) => addon.spiceLevel != SpiceLevel.none);
-                //             }
-                //             if (!widget.cartItem.selectedAddons.contains(newAddon)) {
-                //               widget.cartItem.selectedAddons.add(newAddon);
-                //             }
-                //           });
-                //         },
-                //       ),
-                //     ),
-                //   ),
-              ],
-            ),
-
-            SizedBox(height: 8),
-
-            // ✅ Display Selected Addons (Centered)
-            // Center(
-            //   child: widget.cartItem.selectedAddons.isNotEmpty
-            //       ? Wrap(
-            //           spacing: 6,
-            //           children: widget.cartItem.selectedAddons.map((addon) {
-            //             return Chip(
-            //               label: FoodDescription(description: addon.name),
-            //               backgroundColor: secondaryColor,
-            //               deleteIcon: Icon(Icons.close, size: 14, color: Colors.red),
-            //               onDeleted: () {
-            //                 setState(() {
-            //                   widget.cartItem.selectedAddons.remove(addon);
-            //                 });
-            //               },
-            //             );
-            //           }).toList(),
-            //         )
-            //       : FoodDescription(description: "No addons added", color: const Color.fromARGB(255, 182, 182, 182)),
-            // ),
           ],
         ),
       ),
