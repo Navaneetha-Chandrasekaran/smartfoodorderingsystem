@@ -53,7 +53,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: IstharaScreen(), // ✅ Entry screen
+      home: UserLoginScreen(), // ✅ Entry screen
       theme: Provider.of<ThemeProvider>(context).themeData,
 
       routes: {

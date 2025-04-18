@@ -1,14 +1,11 @@
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/shop.dart';
 
 class ShopService {
-  // You can remove the hardcoded value and get the shop ID dynamically from the selected shop
-  Future<int?> getSelectedShopId(Shop selectedShop) async {
-    return int.tryParse(selectedShop.id); // Assuming 'id' is a string, and you want to parse it into an integer
-  }
-
+  // Fetch the list of shops from the backend
   Future<List<Shop>> fetchShops() async {
     final String baseUrl = dotenv.env['API_BASE_URL']!;
     final Uri url = Uri.parse('$baseUrl/shop/get-shops'); // 👈 No query param
@@ -34,6 +31,46 @@ class ShopService {
     } catch (e) {
       print('Error: $e');  // Log the error if the request fails
       throw Exception('Error fetching shops: $e');
+    }
+  }
+
+  // Store the shop ID in local storage
+  Future<void> storeSelectedShopId(String shopId) async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      bool isStored = await prefs.setString('selectedShopId', shopId);
+      if (isStored) {
+        print("Shop ID stored successfully: $shopId");
+      } else {
+        print("Failed to store Shop ID.");
+      }
+    } catch (e) {
+      print("Error storing Shop ID: $e");
+    }
+  }
+
+  // Fetch the selected shop ID from local storage
+  Future<String?> getStoredShopId() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? shopId = prefs.getString('selectedShopId');
+      print("Fetched Shop ID: $shopId");
+      return shopId;
+    } catch (e) {
+      print("Error fetching Shop ID: $e");
+      return null;
+    }
+  }
+
+  // Get shop ID dynamically from the selected shop (assumes `Shop` has an `id` field)
+  Future<int?> getSelectedShopId(Shop selectedShop) async {
+    try {
+      int? shopId = int.tryParse(selectedShop.id); // Assuming 'id' is a string, and you want to parse it into an integer
+      print("Selected Shop ID: $shopId");
+      return shopId;
+    } catch (e) {
+      print("Error parsing Shop ID: $e");
+      return null;
     }
   }
 }

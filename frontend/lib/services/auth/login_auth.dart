@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  /// ✅ **User Login**
+  /// ✅ User Login
   Future<Map<String, dynamic>> loginUser(String email, String password) async {
     final String baseUrl = dotenv.env['API_BASE_URL']!;
     final String loginUrl = '$baseUrl/auth/login';
@@ -22,43 +22,50 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print("📦 Decoded JSON: $data");
+
         SharedPreferences prefs = await SharedPreferences.getInstance();
 
-        // Store user data in local storage
+        // ✅ Store user data locally
         await prefs.setString('userId', data['userId'].toString());
         await prefs.setString('email', data['email']);
         await prefs.setString('name', data['name']);
+        // await prefs.setString('role', data['role']);
 
-        // Print stored values to the console
-        print("✅ Stored user data:");
-        print("UserId: ${prefs.getString('userId')}");
-        print("Email: ${prefs.getString('email')}");
-        print("Name: ${prefs.getString('name')}");
-
-        return {'success': true, 'message': data['message'], 'role': data['role']};
-      } else {
+        return {
+          'success': true,
+          'message': data['message'],
+          'role': data['role'],
+        };
+      }
+      else {
         final error = json.decode(response.body);
-        return {'success': false, 'message': error['message']};
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Login failed',
+        };
       }
     } catch (e) {
       print("❌ API Request Error: $e");
-      return {'success': false, 'message': 'Server error: $e'};
+      return {
+        'success': false,
+        'message': 'Server error: $e',
+      };
     }
   }
 
-  /// ✅ **Get Current User ID as int**
+  // ✅ Global Static Getters
+
   static Future<int?> getCurrentUserId() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? userIdString = prefs.getString('userId');
-    print("Fetched userId: $userIdString");
+    final userIdString = prefs.getString('userId');
+    print("🔍 Retrieved userId: $userIdString");
 
-    if (userIdString != null && userIdString.isNotEmpty) {
-      return int.tryParse(userIdString);
-    }
-    return null;
+    return (userIdString != null && userIdString.isNotEmpty)
+        ? int.tryParse(userIdString)
+        : null;
   }
 
-  /// ✅ **Optional Getters**
   static Future<String?> getCurrentEmail() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getString('email');
@@ -74,9 +81,10 @@ class AuthService {
     return prefs.getString('role');
   }
 
-  /// ✅ **Logout**
+  // ✅ Logout
   Future<void> logoutUser() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // clears all stored user data
+    await prefs.clear();
+    print("👋 User logged out. Local data cleared.");
   }
 }

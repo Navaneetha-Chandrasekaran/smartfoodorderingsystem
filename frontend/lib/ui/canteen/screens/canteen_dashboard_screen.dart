@@ -243,7 +243,7 @@
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("OTP: ${order.items.first.otp ?? "----"}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600])),
+                  // Text("OTP: ${order.items.first.otp ?? "----"}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600])),
                   Text("₹${orderCost.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
                 ],
               ),
@@ -379,27 +379,27 @@
         ElevatedButton(
           onPressed: () {
             final enteredOtp = otpController.text.trim();
-            final actualOtp = order.items.first.otp;
+            // final actualOtp = order.items.first.otp;
 
-            if (enteredOtp == actualOtp) {
-              foodMenu.completeOrder(order.orderNumber); // ✅ Move to completed
-              Navigator.pop(context);
-              setState(() {}); // ✅ Refresh dashboard to remove the order
+            // if (enteredOtp == actualOtp) {
+            //   foodMenu.completeOrder(order.orderNumber); // ✅ Move to completed
+            //   Navigator.pop(context);
+            //   setState(() {}); // ✅ Refresh dashboard to remove the order
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("✅ Order #$orderNumber completed successfully!"),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("❌ Incorrect OTP! Please try again."),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
+            //   ScaffoldMessenger.of(context).showSnackBar(
+            //     SnackBar(
+            //       content: Text("✅ Order #$orderNumber completed successfully!"),
+            //       backgroundColor: Colors.green,
+            //     ),
+            //   );
+            // } else {
+            //   ScaffoldMessenger.of(context).showSnackBar(
+            //     const SnackBar(
+            //       content: Text("❌ Incorrect OTP! Please try again."),
+            //       backgroundColor: Colors.red,
+            //     ),
+            //   );
+            // }
           },
           child: const Text("Verify"),
         ),
@@ -424,11 +424,11 @@
           // selectedAddons: [],
           quantity: Random().nextInt(3) + 1,
           otp: (1000 + Random().nextInt(9000)).toString(),
-          paymentMode: Random().nextBool() ? "Cash" : "GPay",
+          paymentMode: Random().nextBool() ? "Cash" : "GPay", cartId: '',
         ),
       ],
       pickupTime: TimeOfDay.now(),
-      orderPlacedTime: DateTime.now(),
+      orderPlacedTime: DateTime.now(), shopId: '',
     );
 
     // Add the entire Order object

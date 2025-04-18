@@ -81,7 +81,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
                     width: screenWidth * 0.1,
                     height: screenWidth * 0.1,
                   ),
-                  destination: null,
+                  destination: null, shop: shop,
                 ),
               );
             },

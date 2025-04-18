@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../services/shop_service.dart';
 import '../sheets/navigator.dart';
+import 'shop.dart';
 import 'titles.dart';
 
 
@@ -144,12 +146,14 @@ class Shops extends StatefulWidget {
     required this.shopName,
     required this.status,
     this.destination,
+    required this.shop,  // Pass the entire Shop object for handling its ID
   });
 
   final Image icon;
   final SubTitles shopName;
   final Image status;
   final Widget? destination;
+  final Shop shop;  // Add the shop object to access its ID
 
   @override
   State<Shops> createState() => _ShopsState();
@@ -157,6 +161,12 @@ class Shops extends StatefulWidget {
 
 class _ShopsState extends State<Shops> {
   bool _isTapped = false;
+
+  // Method to store the selected shop ID
+  Future<void> _storeShopId() async {
+    await ShopService().storeSelectedShopId(widget.shop.id);  // Store the shop ID in SharedPreferences
+    print("Stored shop ID: ${widget.shop.id}");
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -167,9 +177,15 @@ class _ShopsState extends State<Shops> {
       onTapDown: (_) => setState(() => _isTapped = true),
       onTapUp: (_) => setState(() => _isTapped = false),
       onTapCancel: () => setState(() => _isTapped = false),
-      onTap: widget.destination != null
-          ? () => Navigation.navigateTo(context, widget.destination!)
-          : null,
+      onTap: () {
+        // Store the shop ID when tapped
+        _storeShopId();
+
+        // Navigate to the destination page if it is not null
+        if (widget.destination != null) {
+          Navigation.navigateTo(context, widget.destination!);
+        }
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         width: sw * 0.85,

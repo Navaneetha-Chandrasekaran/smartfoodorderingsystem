@@ -16,7 +16,7 @@ class OrderService {
     required double totalAmount,
     required List<CartItem> cartItems,
   }) async {
-    final url = Uri.parse('$apiUrl/orders/placeorder'); // Use API_BASE_URL from the .env
+    final url = Uri.parse('$apiUrl/orders/placeorder'); // API endpoint for placing the order
 
     final headers = {
       'Content-Type': 'application/json',
@@ -30,7 +30,7 @@ class OrderService {
       'total_amount': totalAmount,
       'food_items': cartItems.map((cartItem) {
         return {
-          'food_id': cartItem.food.id, // Assuming food has an `id`
+          'food_id': cartItem.food.id, // Assuming cartItem has `food` object with `id`
           'quantity': cartItem.quantity,
         };
       }).toList(),

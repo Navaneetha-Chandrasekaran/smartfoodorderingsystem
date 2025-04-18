@@ -1,25 +1,27 @@
-import 'package:flutter/material.dart';
-
 import '../food.dart';
 
+
 class CartItem {
+  String cartId;
   Food food;
-  // List<Addon> selectedAddons;
   int quantity;
-  TimeOfDay? selectedTime;
-  String? otp;
-  String? paymentMode;
 
   CartItem({
+    required this.cartId,
     required this.food,
-    // this.selectedAddons = const[],
-    this.quantity = 1,
-    this.selectedTime,
-    this.otp,
-    this.paymentMode
+    this.quantity = 1, required String paymentMode, required String otp,
   });
 
-  double get totalPrice{
-    return food.price * quantity; 
+  double get totalPrice {
+    return food.price * quantity;
+  }
+
+  // From JSON
+  factory CartItem.fromJson(Map<String, dynamic> json) {
+    return CartItem(
+      cartId: json['cart_id'],
+      food: Food.fromJson(json['food']),
+      quantity: json['quantity'] ?? 1, paymentMode: '', otp: '',
+    );
   }
 }

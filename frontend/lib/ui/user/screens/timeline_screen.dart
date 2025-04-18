@@ -243,11 +243,18 @@ void _cancelOrder(int index, String reason) {
 
 
   Widget _buildOrderedFoodList(FoodMenu foodMenu, String orderNumber) {
+  // Convert orderNumber (String) to an integer for correct comparison
+  final int parsedOrderNumber = int.tryParse(orderNumber) ?? -1; // Safely parse the string to an integer
+
+  // Fetch the ordered items by matching the order number
   final orderedItems = foodMenu.getActiveOrders().firstWhere(
-  (order) => order.orderNumber.toString() == orderNumber,
-  orElse: () => Order(orderNumber: -1, items: [], orderPlacedTime: DateTime.now()), // ✅ Return a valid Order object
+    (order) => order.orderNumber == parsedOrderNumber, // Compare integer to integer
+    orElse: () => Order(
+      orderNumber: -1, 
+      items: [], 
+      orderPlacedTime: DateTime.now(), shopId: '',
+    ), // Return an empty order if not found
   ).items;
-// ✅ Access `items` from `Order` object
 
   if (orderedItems.isEmpty) return const SizedBox();
 
@@ -267,6 +274,7 @@ void _cancelOrder(int index, String reason) {
     ],
   );
 }
+
 
 
   Widget _buildFoodItemTile(CartItem cartItem) {

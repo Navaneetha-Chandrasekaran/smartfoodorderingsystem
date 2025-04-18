@@ -11,6 +11,7 @@ class Order {
   final List<CartItem> items;
   final TimeOfDay? pickupTime;
   final DateTime orderPlacedTime;
+  final String shopId;
   final Duration preparationTime;
   final String? paymentMode;
   bool expired;
@@ -25,6 +26,7 @@ class Order {
     required this.items,
     this.pickupTime,
     required this.orderPlacedTime,
+    required this.shopId,
     this.preparationTime = const Duration(minutes: 10),
     this.paymentMode,
     this.step = 1,
@@ -46,7 +48,7 @@ class FoodMenu extends ChangeNotifier {
   List<Food> _rawMenu = [];
   List<Food> _menu = [];
   String? _currentTypeFilter;
-
+  
   final List<CartItem> _cart = [];
   final List<Order> _orders = [];
   List<CartItem> _lastOrderedItems = [];
@@ -85,51 +87,30 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  // void addToCart(Food food, /*List<Addon> selectedAddons*/) {
-  //   if (food.availableQuantity > 0) {
-  //     CartItem? cartItem = _cart.firstWhereOrNull(
-  //       (item) => item.food == food /*&& _areAddonsEqual(item.selectedAddons, selectedAddons ),*/);
+  void addToCart(Food food) {
+    if (food.availableQuantity > 0) {
+      CartItem? cartItem = _cart.firstWhereOrNull(
+        (item) => item.food == food,
+      );
 
-  //     if (cartItem != null) {
-  //       cartItem.quantity++;
-  //     } else {
-  //       _cart.add(CartItem(food: food, /*selectedAddons: selectedAddons, quantity: 1*/));
-  //     }
+      if (cartItem != null) {
+        cartItem.quantity++;
+      } else {
+        _cart.add(CartItem(food: food, cartId: '', otp: '', paymentMode: ''));
+      }
 
-  //     food.availableQuantity--;
-  //     notifyListeners();
-  //   }
-  // }
-
-  void addToCart(Food food /*, List<Addon> selectedAddons*/) {
-  if (food.availableQuantity > 0) {
-    // Check if the item is already in the cart
-    CartItem? cartItem = _cart.firstWhereOrNull(
-      (item) => item.food == food /*&& _areAddonsEqual(item.selectedAddons, selectedAddons )*/,
-    );
-
-    // If the item is in the cart, increase the quantity; otherwise, add the new item to the cart
-    if (cartItem != null) {
-      cartItem.quantity++;
-    } else {
-      _cart.add(CartItem(food: food, /*selectedAddons: selectedAddons, quantity: 1*/));
+      notifyListeners();
     }
-
-    // Do not change the available quantity here
-    // food.availableQuantity--; // <-- This line is removed
-
-    notifyListeners();
   }
-}
 
-
-  void placeOrder(TimeOfDay? selectedTime, String? otp, String selectedPayment) {
+  void placeOrder(TimeOfDay? selectedTime, String? otp, String selectedPayment, String shopId) {
     if (_cart.isNotEmpty) {
       Order newOrder = Order(
         orderNumber: _nextOrderNumber++,
         items: List.from(_cart),
         pickupTime: selectedTime,
         orderPlacedTime: DateTime.now(),
+        shopId: shopId,
       );
       _orders.add(newOrder);
       _upcomingOrders.add(newOrder);
@@ -172,11 +153,6 @@ class FoodMenu extends ChangeNotifier {
 
     order.isCancelled = true;
     order.step = 0;
-    notifyListeners();
-  }
-
-  void resetOrderStatus() {
-    _isOrderCancelled = false;
     notifyListeners();
   }
 
@@ -226,8 +202,8 @@ class FoodMenu extends ChangeNotifier {
   void updateFood(Food updatedFood) {
     int index = _menu.indexWhere((food) => food.id == updatedFood.id);
     if (index != -1) {
-      _menu[index] = updatedFood;  // Update the food in the list
-      notifyListeners();  // Notify listeners to rebuild the UI
+      _menu[index] = updatedFood;  
+      notifyListeners();  
     }
   }
 
@@ -243,16 +219,8 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  // bool _areAddonsEqual(List<Addon> list1, List<Addon> list2) {
-  //   return const DeepCollectionEquality().equals(
-  //     list1.map((e) => e.name).toList(),
-  //     list2.map((e) => e.name).toList(),
-  //   );
-  // }
-
   // Fetch food menu from backend
-
-Future<void> fetchMenuFromBackend({FoodCategory? category, String? type, required int shopId}) async {
+  Future<void> fetchMenuFromBackend({FoodCategory? category, String? type, required int shopId}) async {
     try {
       final categoryStr = category?.name.toLowerCase() ?? 'lunch';
       final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
@@ -296,7 +264,6 @@ Future<void> fetchMenuFromBackend({FoodCategory? category, String? type, require
     debugPrint('📋 Filtered menu length: ${_menu.length}');
     notifyListeners();
   }
-
 
   void updateFilter(String? type) {
     _currentTypeFilter = type?.toLowerCase().replaceAll('_', ' ');

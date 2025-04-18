@@ -161,8 +161,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         height: sh * 0.18,
                       ),
                       destination: shop.name.toLowerCase() == 'isthara'
-                          ? const IstharaScreen()
-                          : null,
+                          ? IstharaScreen(shopId: shop.id)  // Pass the shopId
+                          : null, 
+                      shop: shop,
                     ),
                   );
                 }).toList(),

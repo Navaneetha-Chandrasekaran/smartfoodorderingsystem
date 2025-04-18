@@ -13,7 +13,9 @@ import 'food_screen.dart';
 enum FoodTypeFilter { all, veg, nonVeg }
 
 class IstharaScreen extends StatefulWidget {
-  const IstharaScreen({super.key});
+  final String shopId;
+
+  const IstharaScreen({super.key, required this.shopId});
 
   @override
   State<IstharaScreen> createState() => _IstharaScreenState();
@@ -28,14 +30,14 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
     super.initState();
     _tabController = TabController(length: FoodCategory.values.length, vsync: this);
     _tabController.addListener(_handleTabChange);
-    _retryFetch(); // Initial load
+    _retryFetch(shopId: widget.shopId); // Initial load
   }
 
   void _handleTabChange() {
     if (_tabController.indexIsChanging) return;
     _retryFetch(
       category: FoodCategory.values[_tabController.index],
-      type: _currentFilterType,
+      type: _currentFilterType, shopId: widget.shopId,
     );
   }
 
@@ -50,17 +52,17 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
     }
   }
 
-  Future<void> _retryFetch({FoodCategory? category, String? type}) async {
+  Future<void> _retryFetch({FoodCategory? category, String? type, required String shopId}) async {
     try {
       await Provider.of<FoodMenu>(context, listen: false)
-          .fetchMenuFromBackend(category: category, type: type, shopId: 2);
+          .fetchMenuFromBackend(category: category, type: type, shopId: int.parse(shopId));
     } catch (e) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ErrorDialog.show(
           context,
           title: "Menu Load Failed",
           message: e.toString(),
-          onRetry: () => _retryFetch(category: category, type: type),
+          onRetry: () => _retryFetch(category: category, type: type, shopId: shopId),
         );
       });
     }
@@ -73,6 +75,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
     _retryFetch(
       category: FoodCategory.values[_tabController.index],
       type: _currentFilterType,
+      shopId: widget.shopId,
     );
   }
 
@@ -83,6 +86,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
     _retryFetch(
       category: FoodCategory.values[_tabController.index],
       type: _currentFilterType,
+      shopId: widget.shopId,
     );
   }
 
@@ -98,6 +102,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                 onRefresh: () => _retryFetch(
                   category: category,
                   type: _currentFilterType,
+                  shopId: widget.shopId,
                 ),
                 child: ListView.builder(
                   key: ValueKey('${category.name}_${_filter.name}'),
@@ -106,7 +111,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                     food: categoryItems[i],
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => FoodScreen(food: categoryItems[i])),
-                    )
+                    ),
                   ),
                 ),
               ),
@@ -148,17 +153,15 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                     onNonVegToggle: _toggleNonVeg,
                   ),
                 ],
-                body: Consumer<FoodMenu>(
-                  builder: (context, foodMenu, _) {
-                    final menu = foodMenu.menu;
-                    return menu.isEmpty
-                        ? const Center(child: Text("Menu is empty"))
-                        : TabBarView(
-                            controller: _tabController,
-                            children: getFoodInCategory(menu),
-                          );
-                  },
-                ),
+                body: Consumer<FoodMenu>(builder: (context, foodMenu, _) {
+                  final menu = foodMenu.menu;
+                  return menu.isEmpty
+                      ? const Center(child: Text("Menu is empty"))
+                      : TabBarView(
+                          controller: _tabController,
+                          children: getFoodInCategory(menu),
+                        );
+                }),
               ),
             ),
           ),

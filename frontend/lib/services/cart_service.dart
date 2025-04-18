@@ -1,10 +1,28 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
+import '../models/cart_item.dart';
 
 class CartService {
   final String baseUrl = dotenv.env['API_BASE_URL']!;
+
+  // Fetch cart items
+  Future<List<CartItem>> getCartItems(String userId) async {
+    final Uri url = Uri.parse('$baseUrl/cart/view/$userId');
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> cartData = json.decode(response.body);
+        return cartData.map((item) => CartItem.fromJson(item)).toList();
+      } else {
+        throw Exception('Failed to load cart items');
+      }
+    } catch (e) {
+      throw Exception('Error: $e');
+    }
+  }
 
   // Add item to cart
   Future<Map<String, dynamic>> addToCart(String userId, String shopId, String foodId) async {
@@ -25,6 +43,42 @@ class CartService {
 
       if (response.statusCode == 200) {
         return {'success': true, 'message': 'Item added to cart!'};
+      } else {
+        final error = json.decode(response.body);
+        return {'success': false, 'message': error['error'] ?? 'Unknown error'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  // Remove item from cart
+  Future<Map<String, dynamic>> removeFromCart(String cartId) async {
+    final Uri url = Uri.parse('$baseUrl/cart/remove/$cartId');
+
+    try {
+      final response = await http.delete(url);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': 'Item removed from cart!'};
+      } else {
+        final error = json.decode(response.body);
+        return {'success': false, 'message': error['error'] ?? 'Unknown error'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  // Clear the cart
+  Future<Map<String, dynamic>> clearCart(String userId) async {
+    final Uri url = Uri.parse('$baseUrl/cart/clear/$userId');
+
+    try {
+      final response = await http.delete(url);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': 'Cart cleared!'};
       } else {
         final error = json.decode(response.body);
         return {'success': false, 'message': error['error'] ?? 'Unknown error'};

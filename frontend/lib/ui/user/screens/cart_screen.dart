@@ -9,6 +9,9 @@ import '../../../models/constants.dart';
 import '../../../models/payment_selector.dart';
 import '../../../models/time_selector.dart';
 import '../../../models/titles.dart';
+import '../../../services/auth/login_auth.dart';
+import '../../../services/order_service.dart';
+import '../../../services/shop_service.dart';
 import '../../../sheets/navigator.dart';
 import '../sheets/navbar.dart';
 import '../sheets/shared_prefs.dart';
@@ -17,7 +20,7 @@ import 'timeline_screen.dart';
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
-  @override
+  @override 
   State<CartScreen> createState() => _CartScreenState();
 }
 
@@ -39,43 +42,146 @@ class _CartScreenState extends State<CartScreen> {
     });
   }
 
-  void _placeOrder() {
-    final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-  
-    if (foodMenu.cart.isEmpty) return; // ✅ Prevent order placement when cart is empty
+  // void _placeOrder() async {
+  //   final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+  //   final shopId = await ShopService().getStoredShopId(); // Get the selected shopId
 
-    if (_selectedTime == null) {
-      setState(() => _showTimeError = true);
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _showTimeError = false);
-      });
-      return;
-    }
+  //   if (foodMenu.cart.isEmpty) return; // ✅ Prevent order placement when cart is empty
 
-    setState(() => _isOrderProcessing = true);
+  //   if (_selectedTime == null) {
+  //     setState(() => _showTimeError = true);
+  //     Future.delayed(const Duration(seconds: 3), () {
+  //       if (mounted) setState(() => _showTimeError = false);
+  //     });
+  //     return;
+  //   }
 
-    Future.delayed(const Duration(seconds: 5), () { // Combined loading + order placed delay
-      if (!mounted) return;
+  //   if (shopId == null) {
+  //     setState(() => _showTimeError = true); // Display an error if no shop is selected
+  //     Future.delayed(const Duration(seconds: 3), () {
+  //       if (mounted) setState(() => _showTimeError = false);
+  //     });
+  //     return;
+  //   }
 
-      setState(() {
-        _isOrderProcessing = false;
-        _isOrderPlaced = true;
-      });
+  //   setState(() => _isOrderProcessing = true);
 
-      // Pass the necessary data (time, otp, payment method) to place the order
-      foodMenu.placeOrder(_selectedTime, _otp, _selectedPayment);
+  //   // Simulate order placement delay
+  //   Future.delayed(const Duration(seconds: 5), () { // Combined loading + order placed delay
+  //     if (!mounted) return;
 
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) {
-          setState(() => _isOrderPlaced = false);
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const TimelineScreen()),
-          );
-        }
-      });
-    });
+  //     setState(() {
+  //       _isOrderProcessing = false;
+  //       _isOrderPlaced = true;
+  //     });
+
+  //     // Pass the necessary data (time, otp, payment method, and shopId) to place the order
+  //     foodMenu.placeOrder(_selectedTime, _otp, _selectedPayment, shopId);
+
+  //     Future.delayed(const Duration(seconds: 3), () {
+  //       if (mounted) {
+  //         setState(() => _isOrderPlaced = false);
+  //         Navigator.pushReplacement(
+  //           context,
+  //           MaterialPageRoute(builder: (context) => const TimelineScreen()),
+  //         );
+  //       }
+  //     });
+  //   });
+  // }
+
+  void _placeOrder() async {
+  final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+  final shopId = await ShopService().getStoredShopId(); // Get the selected shopId
+
+  // Retrieve userId from shared preferences using AuthService
+  final userId = await AuthService.getCurrentUserId(); // This uses the static method
+
+  print("🔍 ShopId: $shopId"); // Debug: Print shopId
+  print("🔍 UserId: $userId"); // Debug: Print userId
+
+  if (foodMenu.cart.isEmpty) {
+    print("❌ Cart is empty!"); // Debug: Cart is empty
+    return; // ✅ Prevent order placement when cart is empty
   }
+
+  if (_selectedTime == null) {
+    print("❌ No pickup time selected!"); // Debug: No time selected
+    setState(() => _showTimeError = true);
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showTimeError = false);
+    });
+    return;
+  }
+
+  if (shopId == null) {
+    print("❌ No shop selected!"); // Debug: No shop selected
+    setState(() => _showTimeError = true); // Display an error if no shop is selected
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showTimeError = false);
+    });
+    return;
+  }
+
+  print("🔄 Placing order..."); // Debug: Order is being placed
+  setState(() => _isOrderProcessing = true);
+
+  // Now call the OrderService to place the order
+  final orderService = OrderService();
+
+  // Pass the data to place the order
+  final result = await orderService.placeOrder(
+    userId: userId.toString(),  // Pass the userId retrieved from shared preferences
+    shopId: shopId,
+    pickupTime: _selectedTime!.format(context), // Assuming you need the formatted time string
+    paymentMethod: _selectedPayment,
+    totalAmount: foodMenu.getTotalPrice(), // Pass total amount
+    cartItems: foodMenu.cart, // Pass cart items
+  );
+
+  print("📦 Order placement result: $result"); // Debug: Log the result of the API call
+
+  if (result.containsKey('error')) {
+    // Handle error (e.g., show a message to the user)
+    print("❌ Error placing order: ${result['error']}"); // Debug: Log error message
+    setState(() {
+      _isOrderProcessing = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result['error'])),
+    );
+    return;
+  }
+
+  // Success
+  setState(() {
+    _isOrderProcessing = false;
+    _isOrderPlaced = true;
+
+    // Check if 'otp' exists and is of a valid type
+    if (result['otp'] != null) {
+      _otp = result['otp'].toString();  // Convert it to a String if it's not null
+    } else {
+      _otp = null;  // Handle the case where OTP is missing
+    }
+  });
+
+
+  print("✔️ Order placed successfully. OTP: $_otp"); // Debug: Order placed successfully
+
+  // Navigate to the timeline screen
+  Future.delayed(const Duration(seconds: 5), () {
+    if (mounted) {
+      setState(() => _isOrderPlaced = false);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const TimelineScreen()),
+      );
+    }
+  });
+}
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -152,8 +258,9 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCheckoutSection(double totalCost) {
-    return Container(
-      padding: const EdgeInsets.all(20),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.only(
@@ -162,52 +269,76 @@ class _CartScreenState extends State<CartScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12.withOpacity(0.1),
-            blurRadius: 10,
-            spreadRadius: 1,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            spreadRadius: 5,
           ),
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ✅ Total Cost
+          // 🧾 Total Cost Summary
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                "Total Cost:",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                "Total",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
               Text(
                 "₹${totalCost.toStringAsFixed(2)}",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 15),
 
-          // ✅ Time Selector
+          const SizedBox(height: 20),
+
+          // ⏰ Time Picker
           TimeSelector(
             selectedTime: _selectedTime,
             onTimeSelected: (time) {
-              if (time != _selectedTime) { // ✅ Avoid unnecessary state updates
-                setState(() {
-                  _selectedTime = time;
-                });
+              if (time != _selectedTime) {
+                setState(() => _selectedTime = time);
               }
             },
           ),
 
-          const SizedBox(height: 15),
+          const SizedBox(height: 16),
 
-          // ✅ Payment Selector
+          // 💳 Payment Method
           _buildPaymentSelector(),
 
-          const SizedBox(height: 15),
+          const SizedBox(height: 25),
 
-          // ✅ Order Button
-          OrderButton(
-            onPressed: _isOrderProcessing ? null : _placeOrder, // ✅ Prevent multiple taps
+          // 🚀 Order Button
+          SizedBox(
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: _isOrderProcessing ? null : _placeOrder,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrangeAccent,
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: const Icon(Icons.shopping_bag_outlined, color: Colors.white),
+              label: const Text(
+                "Place Order",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
           ),
         ],
       ),

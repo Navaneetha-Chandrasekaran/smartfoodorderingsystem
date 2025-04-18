@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // ✅ Import for date formatting
+import 'package:intl/intl.dart';
 
 class TimeSelector extends StatefulWidget {
   final TimeOfDay? selectedTime;
@@ -17,46 +17,47 @@ class TimeSelector extends StatefulWidget {
 
 class _TimeSelectorState extends State<TimeSelector> {
   TimeOfDay? _selectedTime;
-  String _currentDate = ""; // ✅ Store current date
+  String _currentDate = "";
 
   @override
   void initState() {
     super.initState();
     _selectedTime = widget.selectedTime;
-    _currentDate = _getCurrentDate(); // ✅ Get current date on init
+    _currentDate = DateFormat("EEEE, MMM d").format(DateTime.now());
   }
 
   Future<void> _pickTime(BuildContext context) async {
-    // ✅ Get current time
-    DateTime now = DateTime.now();
+    final now = DateTime.now();
 
-    // ✅ Show time picker
     TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(now),
+      helpText: 'Select a Pickup Time',
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF6C63FF), // Stylish purple
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
-      DateTime pickedDateTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        picked.hour,
-        picked.minute,
-      );
-
-      // ✅ Ensure selected time is at least 10 minutes ahead
+      final pickedDateTime = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
       if (pickedDateTime.isAfter(now.add(const Duration(minutes: 10)))) {
-        setState(() {
-          _selectedTime = picked;
-        });
-
-        widget.onTimeSelected(picked); // ✅ Notify parent widget
+        setState(() => _selectedTime = picked);
+        widget.onTimeSelected(picked);
       } else {
-        // ✅ Show error message **ONLY IF time is invalid**
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Please select a time at least 10 minutes from now."),
+            content: Text("Please choose a time at least 10 minutes from now."),
             duration: Duration(seconds: 2),
           ),
         );
@@ -64,7 +65,6 @@ class _TimeSelectorState extends State<TimeSelector> {
     }
   }
 
-  // ✅ Formats Time in AM/PM format
   String _formatTime(TimeOfDay time) {
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
@@ -72,51 +72,78 @@ class _TimeSelectorState extends State<TimeSelector> {
     return "$hour:$minute $period";
   }
 
-  // ✅ Get Current Date
-  String _getCurrentDate() {
-    return DateFormat("EEEE, MMM d, yyyy").format(DateTime.now());
-  }
-
   @override
   Widget build(BuildContext context) {
-    double screenWidth = MediaQuery.of(context).size.width;
+    final isSelected = _selectedTime != null;
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ✅ Display Current Date
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            "Date: $_currentDate",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
-          ),
+        const Text(
+          "Select Pickup Time",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
 
-        // ✅ Time Selector
+        // Card-style container
         InkWell(
           onTap: () => _pickTime(context),
+          borderRadius: BorderRadius.circular(18),
           child: Container(
-            width: screenWidth * 0.9,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            width: screenWidth,
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
             decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(50),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white,
+                  Colors.grey.shade100,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.shade300,
+                  offset: const Offset(2, 3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+              border: Border.all(
+                color: isSelected ? const Color(0xFF6C63FF) : Colors.grey.shade300,
+                width: 1.5,
+              ),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.access_time, color: Colors.blue, size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  _selectedTime != null
-                      ? _formatTime(_selectedTime!)
-                      : "Select Time",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Icon(Icons.access_time_rounded,
+                        color: isSelected ? const Color(0xFF6C63FF) : Colors.grey, size: 22),
+                    const SizedBox(width: 10),
+                    Text(
+                      isSelected ? _formatTime(_selectedTime!) : "Select Time",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.black : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_rounded, size: 18, color: Colors.black54),
+                    const SizedBox(width: 6),
+                    Text(
+                      _currentDate,
+                      style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                 ),
               ],
             ),
