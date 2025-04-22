@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:collection/collection.dart';
 import 'food.dart';
 import 'models/cart_item.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Order {
   final int orderNumber;
@@ -51,6 +52,7 @@ class FoodMenu extends ChangeNotifier {
   
   final List<CartItem> _cart = [];
   final List<Order> _orders = [];
+  Map<String, dynamic>? _latestOrderData;
   List<CartItem> _lastOrderedItems = [];
   List<Order> _upcomingOrders = [];
   final List<Order> _completedOrders = [];
@@ -59,6 +61,12 @@ class FoodMenu extends ChangeNotifier {
   int _nextOrderNumber = 1;
   bool _isOrderCancelled = false;
 
+  static const String _orderDataKey = 'latest_order_data';
+
+  FoodMenu() {
+    _loadLatestOrderData();
+  }
+
   List<Food> get menu => _menu;
   List<CartItem> get cart => _cart;
   List<CartItem> get lastOrderedItems => _lastOrderedItems;
@@ -66,6 +74,46 @@ class FoodMenu extends ChangeNotifier {
   List<Order> get completedOrders => _completedOrders;
   bool get isOrderCancelled => _isOrderCancelled;
   int get nextOrderNumber => _nextOrderNumber;
+  Map<String, dynamic>? get latestOrderData => _latestOrderData;
+
+  Future<void> _loadLatestOrderData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final orderDataString = prefs.getString(_orderDataKey);
+      if (orderDataString != null) {
+        _latestOrderData = json.decode(orderDataString);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error loading order data: $e');
+    }
+  }
+
+  Future<void> setLatestOrderData(Map<String, dynamic> orderData) async {
+    if (_latestOrderData != orderData) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_orderDataKey, json.encode(orderData));
+        _latestOrderData = orderData;
+        notifyListeners();
+      } catch (e) {
+        print('Error saving order data: $e');
+      }
+    }
+  }
+
+  Future<void> clearLatestOrderData() async {
+    if (_latestOrderData != null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_orderDataKey);
+        _latestOrderData = null;
+        notifyListeners();
+      } catch (e) {
+        print('Error clearing order data: $e');
+      }
+    }
+  }
 
   List<Order> getActiveOrders() {
     final completedOrderIds = _completedOrders.map((o) => o.orderNumber).toSet();
@@ -233,7 +281,7 @@ class FoodMenu extends ChangeNotifier {
         'shop_id': shopId.toString(),
         'category': categoryStr,
         if (type != null) 'type': type.replaceAll(' ', '_').toLowerCase(),
-      };
+      }; 
 
       final uri = isSecure
           ? Uri.https(host, path, queryParams)

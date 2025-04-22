@@ -16,6 +16,10 @@ import '../../../services/order_service.dart';
 import '../../../services/shop_service.dart';
 import '../../../services/auth/login_auth.dart';
 import '../../../services/utils.dart';
+import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timeline_tile/timeline_tile.dart';
+import '../../../animations/timeline_animation.dart';
 
 
 class OrderTimeline {
@@ -52,109 +56,98 @@ class TimelineScreen extends StatefulWidget {
 }
 
 class _TimelineScreenState extends State<TimelineScreen> {
-  final List<OrderTimeline> _orders = [];
-  final Set<String> _animatedOrders = {};
+  Map<String, dynamic>? selectedOrder;
+  List<Map<String, dynamic>> orders = [];
+  bool isLoading = false;
+  final Set<String> animatedOrders = {};
   final OrderService _orderService = OrderService();
   String? _currentUserId;
   String? _currentShopId;
+  Map<String, dynamic>? _orderData;
 
   @override
   void initState() {
     super.initState();
-    _initializeUserAndOrders();
+    _loadAllOrders();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    
+    // Get arguments from navigation
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    if (args != null) {
-      print("📦 Received navigation arguments: $args");
-      try {
-        final itemsList = args['items'] as List<dynamic>;
-        final orderId = args['order_id']?.toString() ?? '';
-        final otp = args['otp']?.toString() ?? '';
-        final paymentMode = args['payment_mode']?.toString() ?? '';
-        final pickupTime = args['pickup_time']?.toString() ?? '';
-        final totalAmount = double.tryParse(args['total_amount']?.toString() ?? '0.0') ?? 0.0;
-
-        if (!_orders.any((o) => o.orderId == orderId)) {
-          setState(() {
-            _orders.add(OrderTimeline(
-              orderId: orderId,
-              items: itemsList.map((item) {
-                return CartItem(
-                  cartId: '',
-                  food: Food(
-                    id: int.tryParse(item['id']?.toString() ?? '0') ?? 0,
-                    name: item['name']?.toString() ?? '',
-                    description: item['description']?.toString() ?? '',
-                    price: double.tryParse(item['price']?.toString() ?? '0.0') ?? 0.0,
-                    image: getFullImageUrl(item['image_path']?.toString()),
-                    category: FoodCategory.lunch,
-                    isVeg: item['isVeg'] as bool? ?? true,
-                    availableQuantity: 0,
-                  ),
-                  quantity: int.tryParse(item['quantity']?.toString() ?? '1') ?? 1,
-                  paymentMode: paymentMode,
-                  otp: otp,
-                );
-              }).toList(),
-              pickupTime: _parsePickupTime(pickupTime),
-              orderPlacedTime: DateTime.now(),
-              shopId: '',  // Will be set by API data
-              orderOtp: otp,
-              paymentMode: paymentMode,
-              totalAmount: totalAmount,
-            ));
-          });
-          print("✅ Successfully added order from navigation arguments");
-        }
-      } catch (e, stackTrace) {
-        print("❌ Error processing navigation arguments: $e");
-        print("📝 Stack trace: $stackTrace");
+    
+    if (args != null && mounted) {
+      setState(() {
+        _orderData = args;
+      });
+      _saveOrderData(args);
+    } else {
+      // If no navigation arguments, try to load from stored data
+  final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+      if (foodMenu.latestOrderData != null) {
+        setState(() {
+          _orderData = foodMenu.latestOrderData;
+        });
       }
     }
+    
     _initializeUserAndOrders();
   }
 
-  DateTime _parsePickupTime(String timeStr) {
+  Future<void> _loadAllOrders() async {
     try {
-      // Handle ISO format
-      if (timeStr.contains('T')) {
-        return DateTime.parse(timeStr);
-      }
+      final prefs = await SharedPreferences.getInstance();
       
-      // Handle AM/PM format
-      final parts = timeStr.split(' ');
-      if (parts.length != 2) {
-        print("⚠️ Invalid time format: $timeStr");
-        return DateTime.now().add(const Duration(minutes: 30));
+      // Load the latest order
+      final latestOrderString = prefs.getString('latest_order_data');
+      if (latestOrderString != null) {
+        final latestOrder = json.decode(latestOrderString);
+        
+        // Load existing orders
+        final existingOrdersString = prefs.getString('all_orders');
+        List<Map<String, dynamic>> existingOrders = [];
+        if (existingOrdersString != null) {
+          final List<dynamic> decoded = json.decode(existingOrdersString);
+          existingOrders = decoded.cast<Map<String, dynamic>>();
+        }
+
+        // Check if the latest order is already in the list
+        bool orderExists = existingOrders.any((order) => 
+          order['order_id'] == latestOrder['order_id']);
+
+        if (!orderExists) {
+          existingOrders.insert(0, latestOrder); // Add new order at the beginning
+          // Save updated orders list
+          await prefs.setString('all_orders', json.encode(existingOrders));
+        }
+
+        setState(() {
+          orders = existingOrders;
+          selectedOrder = existingOrders.isNotEmpty ? existingOrders[0] : null;
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+        });
       }
-
-      final timePart = parts[0];
-      final period = parts[1].toUpperCase();
-      
-      final timeComponents = timePart.split(':');
-      if (timeComponents.length != 2) {
-        print("⚠️ Invalid time components: $timeStr");
-        return DateTime.now().add(const Duration(minutes: 30));
-      }
-
-      var hours = int.parse(timeComponents[0]);
-      final minutes = int.parse(timeComponents[1]);
-
-      if (period == 'PM' && hours != 12) {
-        hours += 12;
-      } else if (period == 'AM' && hours == 12) {
-        hours = 0;
-      }
-
-      final now = DateTime.now();
-      return DateTime(now.year, now.month, now.day, hours, minutes);
     } catch (e) {
-      print("⚠️ Error parsing time: $e");
-      return DateTime.now().add(const Duration(minutes: 30));
+      print('Error loading orders: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveOrderData(Map<String, dynamic> orderData) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('latest_order_data', json.encode(orderData));
+      print("💾 Saved order data: $orderData");
+    } catch (e) {
+      print("❌ Error saving order data: $e");
     }
   }
 
@@ -173,67 +166,47 @@ class _TimelineScreenState extends State<TimelineScreen> {
         return;
       }
 
-      final orders = await _orderService.fetchOrders(shopId);
+      final fetchedOrders = await _orderService.fetchOrders(shopId);
       if (mounted) {
         setState(() {
-          // Update existing orders with API data
-          for (var orderData in orders) {
+          // Create a new list to avoid concurrent modification
+          final List<Map<String, dynamic>> updatedOrders = [];
+          
+          // Process fetched orders
+          for (var orderData in fetchedOrders) {
             try {
               print("📦 Processing order data: $orderData");
               
               final orderId = orderData['order_id'].toString();
-              final existingOrder = _orders.firstWhereOrNull((o) => o.orderId == orderId);
+              final existingOrder = orders.firstWhereOrNull((o) => o['order_id'] == orderId);
               
               if (existingOrder != null) {
                 // Update existing order with API data
-                existingOrder.status = orderData['status']?.toString() ?? 'pending';
-                existingOrder.shopId = shopId;
+                existingOrder['status'] = orderData['status']?.toString() ?? 'pending';
+                existingOrder['shopId'] = shopId;
+                updatedOrders.add(existingOrder);
                 print("✅ Updated existing order with API data");
               } else {
-                // Create new order from API data
-                final itemsList = (orderData['items'] ?? []) as List<dynamic>;
-                final totalAmountStr = orderData['total_amount']?.toString() ?? '0.00';
-                final totalAmount = double.tryParse(totalAmountStr) ?? 0.0;
-                
-                _orders.add(OrderTimeline(
-                  orderId: orderId,
-                  items: itemsList.map((item) {
-                    return CartItem(
-                      cartId: '',
-                      food: Food(
-                        id: int.tryParse(item['food_id']?.toString() ?? '0') ?? 0,
-                        name: item['name']?.toString() ?? '',
-                        description: item['description']?.toString() ?? '',
-                        price: double.tryParse(item['price']?.toString() ?? '0.00') ?? 0.0,
-                        image: getFullImageUrl(item['image_path']?.toString()),
-                        category: FoodCategory.lunch,
-                        isVeg: item['isVeg'] as bool? ?? true,
-                        availableQuantity: 0,
-                      ),
-                      quantity: int.tryParse(item['quantity']?.toString() ?? '1') ?? 1,
-                      paymentMode: orderData['payment_method']?.toString() ?? '',
-                      otp: orderData['otp']?.toString() ?? '',
-                    );
-                  }).toList(),
-                  pickupTime: _parsePickupTime(orderData['pickup_time']?.toString() ?? ''),
-                  orderPlacedTime: DateTime.now(),
-                  shopId: shopId,
-                  orderOtp: orderData['otp']?.toString() ?? '',
-                  paymentMode: orderData['payment_method']?.toString() ?? '',
-                  totalAmount: totalAmount,
-                ));
+                // Add new order
+                updatedOrders.add(orderData);
                 print("✅ Added new order from API data");
               }
-            } catch (e, stackTrace) {
+            } catch (e) {
               print("❌ Error processing order: $e");
-              print("📝 Stack trace: $stackTrace");
-              print("📦 Failed order data: $orderData");
             }
+          }
+          
+          // Update the orders list
+          orders = updatedOrders;
+          
+          // Set selected order if none is selected
+          if (selectedOrder == null && orders.isNotEmpty) {
+            selectedOrder = orders[0];
           }
         });
       }
     } catch (e) {
-      print("❌ Error initializing timeline: $e");
+      print("❌ Error initializing orders: $e");
     }
   }
 
@@ -247,210 +220,463 @@ class _TimelineScreenState extends State<TimelineScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order Timeline'),
-        backgroundColor: Colors.green,
+        title: const Text('Order Timeline', 
+          style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
       ),
-      body: _orders.isEmpty
-          ? const Center(
-              child: Text(
-                'No current orders',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
-              ),
-            )
-          : ListView.builder(
-              itemCount: _orders.length,
-              itemBuilder: (context, index) {
-                final order = _orders[index];
-                return _buildOrderCard(order);
-              },
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Colors.purple.shade50,
+            ],
+          ),
+        ),
+        child: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : orders.isEmpty
+              ? const Center(child: Text('No orders available'))
+              : Column(
+                  children: [
+                    // Order Selection Dropdown
+                    _buildOrderSelector(),
+                    // Order Details
+                    if (selectedOrder != null)
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildOtpCard(),
+                                const SizedBox(height: 20),
+                                _buildOrderedItems(),
+                                const SizedBox(height: 20),
+                                _buildOrderStatus(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+      ),
     );
   }
 
-  Widget _buildOrderCard(OrderTimeline order) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildOtpDisplay(order),
-            const SizedBox(height: 20),
-            _buildOrderedFoodList(order),
-            const SizedBox(height: 20),
-            _buildTimelineSteps(order.currentStep, order.orderId),
-            if (order.currentStep == 4) _buildPickupTimer(order),
-            const SizedBox(height: 20),
-            if (order.currentStep != 5)
-              Center(
-                child: CustomButton(
-                  label: "Cancel Order",
-                  gradientColors: [Colors.redAccent, Colors.red],
-                  onPressed: () => _showCancelReasonSheet(context, order),
-                  hasBorder: true,
-                  borderColor: Colors.white,
-                ),
-              ),
-            const SizedBox(height: 30),
-          ],
+  Widget _buildOrderSelector() {
+    if (orders.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.purple[50],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isExpanded: true,
+          value: selectedOrder?['order_id']?.toString(),
+          hint: const Text(
+            'Select an order',
+            style: TextStyle(color: Colors.white70),
+          ),
+          dropdownColor: Colors.purple[50],
+          style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+          items: orders
+              .where((order) => order['order_id'] != null)
+              .map((order) => DropdownMenuItem<String>(
+                    value: order['order_id'].toString(),
+                    child: Text(
+                      'Order #${order['order_id']}',
+                      style: const TextStyle(color: Colors.black87),
+                    ),
+                  ))
+              .toList(),
+          onChanged: (newValue) {
+            if (newValue != null) {
+              setState(() {
+                selectedOrder = orders.firstWhere(
+                  (order) => order['order_id'].toString() == newValue,
+                );
+              });
+            }
+          },
         ),
       ),
     );
   }
 
-  Widget _buildOtpDisplay(OrderTimeline order) {
+  Widget _buildOtpCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF4A00E0), Color(0xFF8E2DE2)]),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, spreadRadius: 1)],
-      ),
-      child: Center(
-        child: Text(
-          "Order OTP: ${order.orderOtp}",
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+        gradient: LinearGradient(
+          colors: [
+            Colors.purple.shade100,
+            Colors.purple.shade200,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-      ),
-    );
-  }
-
-  Widget _buildTimelineSteps(int currentStep, String orderNumber) {
-    return Column(
-      children: [
-        Timeline(
-          isFirst: true,
-          isLast: false,
-          isPast: currentStep >= 1,
-          eventCard: EventCard(isPast: currentStep >= 1, child: const Text('Order Placed')),
-          orderNumber: orderNumber,
-          animatedOrders: _animatedOrders,
-        ),
-        Timeline(
-          isFirst: false,
-          isLast: false,
-          isPast: currentStep >= 2,
-          eventCard: EventCard(isPast: currentStep >= 2, child: const Text('Order Confirmed')),
-          orderNumber: orderNumber,
-          animatedOrders: _animatedOrders,
-        ),
-        Timeline(
-          isFirst: false,
-          isLast: false,
-          isPast: currentStep >= 3,
-          eventCard: EventCard(isPast: currentStep >= 3, child: const Text('Order Getting Ready')),
-          orderNumber: orderNumber,
-          animatedOrders: _animatedOrders,
-        ),
-        Timeline(
-          isFirst: false,
-          isLast: true,
-          isPast: currentStep >= 4,
-          eventCard: EventCard(isPast: currentStep >= 4, child: const Text('Ready for Pickup')),
-          orderNumber: orderNumber,
-          animatedOrders: _animatedOrders,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPickupTimer(OrderTimeline order) {
-    return Center(
-      child: Text(
-        "Order Delivered!",
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
-      ),
-    );
-  }
-
-  Widget _buildOrderedFoodList(OrderTimeline order) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Ordered Items',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        ...order.items.map((item) => Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, spreadRadius: 1)],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purple.withOpacity(0.2),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
-          child: Row(
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  child: Image.network(
-                    getFullImageUrl(item.food.image),
-                    width: 60,
-                    height: 60,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      print('Error loading image for ${item.food.name}: $error');
-                      return Container(
-                        width: 60,
-                        height: 60,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.fastfood, size: 30, color: Colors.grey),
-                      );
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        width: 60,
-                        height: 60,
-                        color: Colors.grey[200],
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded / 
-                                  loadingProgress.expectedTotalBytes!
-                                : null,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                      );
-                    },
+              Text(
+                'Order #${selectedOrder!['order_id']}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'OTP: ${selectedOrder!['otp']}',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.purple.withOpacity(0.2),
+                  spreadRadius: 1,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              '₹${selectedOrder!['total_amount']}',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.purple.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderedItems() {
+    final items = List<Map<String, dynamic>>.from(selectedOrder!['items'] ?? []);
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.purple.shade50,
+                  Colors.purple.shade100,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: const Text(
+              'Ordered Items',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.purple,
+              ),
+            ),
+          ),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      spreadRadius: 1,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ListTile(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      getFullImageUrl(item['image']),
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.fastfood, color: Colors.purple.shade200),
+                        );
+                      },
+                    ),
+                  ),
+                  title: Text(
+                    item['name'],
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'Quantity: ${item['quantity']}',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '₹${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderStatus() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.purple.shade50,
+                  Colors.purple.shade100,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: const Text(
+              'Order Status',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.purple,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              height: 400,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Row(
                   children: [
-                    Text(
-                      item.food.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Quantity: ${item.quantity}',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '₹${(item.food.price * item.quantity).toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: Colors.green,
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildStatusStep(
+                            'Order Placed',
+                            'Your order has been received',
+                            Icons.receipt_long,
+                            true,
+                            isFirst: true,
+                          ),
+                          _buildStatusStep(
+                            'Preparing',
+                            'Chef is preparing your food',
+                            Icons.restaurant,
+                            false,
+                          ),
+                          _buildStatusStep(
+                            'Ready for Pickup',
+                            'Your order is ready to collect',
+                            Icons.takeout_dining,
+                            false,
+                          ),
+                          _buildStatusStep(
+                            'Completed',
+                            'Order has been delivered',
+                            Icons.check_circle,
+                            false,
+                            isLast: true,
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusStep(String title, String subtitle, IconData icon, bool isCompleted, {bool isFirst = false, bool isLast = false}) {
+    return TimelineTile(
+      isFirst: isFirst,
+      isLast: isLast,
+      beforeLineStyle: LineStyle(
+        color: isCompleted ? Colors.green : Colors.grey.shade300,
+        thickness: 4,
+      ),
+      indicatorStyle: IndicatorStyle(
+        width: 40,
+        height: 40,
+        indicator: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isCompleted 
+                ? [Colors.green.shade400, Colors.green.shade600]
+                : [Colors.grey.shade300, Colors.grey.shade400],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: (isCompleted ? Colors.green : Colors.grey).withOpacity(0.3),
+                spreadRadius: 2,
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
             ],
           ),
-        )).toList(),
-      ],
+          child: Icon(
+            isCompleted ? Icons.check : icon,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+      ),
+      endChild: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isCompleted ? Colors.green.shade50 : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: (isCompleted ? Colors.green : Colors.grey).withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: isCompleted ? Colors.green.shade800 : Colors.grey.shade800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: isCompleted ? Colors.green.shade600 : Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -562,4 +788,6 @@ class _CancelReasonSheetState extends State<CancelReasonSheet> {
     );
   }
 }
+
+
 

@@ -5,13 +5,17 @@ import 'package:flutter/material.dart';
 import 'constants.dart';
 
 class EventCard extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final String time;
   final bool isPast;
-  final Widget child;
 
   const EventCard({
     super.key,
-    required this.isPast,
-    required this.child,
+    required this.title,
+    required this.subtitle,
+    required this.time,
+    this.isPast = false,
   });
 
   @override
@@ -83,7 +87,35 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
                     BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 5)
                 ],
               ),
-              child: widget.child,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isPast ? Colors.green : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.time,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

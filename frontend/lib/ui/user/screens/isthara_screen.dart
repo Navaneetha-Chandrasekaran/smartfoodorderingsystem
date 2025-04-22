@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:lottie/lottie.dart';
 import '../../../food.dart';
 import '../../../food_menu.dart';
 import '../../../models/drawer.dart';
@@ -24,25 +25,58 @@ class IstharaScreen extends StatefulWidget {
 class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   FoodTypeFilter _filter = FoodTypeFilter.all;
+  bool _isLoading = false;
+  bool _isAnimating = false;
 
   @override
   void initState() {
     super.initState();
+    _isLoading = true;
+    _isAnimating = true;
     _tabController = TabController(length: FoodCategory.values.length, vsync: this);
-    _tabController.addListener(_handleTabChange);
-    _retryFetch(
-      category: FoodCategory.values[_tabController.index],
-      type: _currentFilterType,
-      shopId: widget.shopId
-    ); // Initial load
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        setState(() {
+          _isAnimating = true;
+          _isLoading = true;
+        });
+      }
+      if (!_tabController.indexIsChanging) {
+        setState(() {
+          _isAnimating = false;
+        });
+        _retryFetch(
+          category: FoodCategory.values[_tabController.index],
+          type: _currentFilterType, 
+          shopId: widget.shopId,
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        });
+      }
+    });
+    // Initial load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _retryFetch(
+        category: FoodCategory.values[_tabController.index],
+        type: _currentFilterType,
+        shopId: widget.shopId,
+      ).then((_) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isAnimating = false;
+          });
+        }
+      });
+    });
   }
 
   void _handleTabChange() {
-    if (_tabController.indexIsChanging) return;
-    _retryFetch(
-      category: FoodCategory.values[_tabController.index],
-      type: _currentFilterType, shopId: widget.shopId,
-    );
+    // Removed since we're handling it in the listener
   }
 
   String? get _currentFilterType {
@@ -75,52 +109,37 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
   void _toggleVeg() {
     setState(() {
       _filter = _filter == FoodTypeFilter.veg ? FoodTypeFilter.all : FoodTypeFilter.veg;
+      _isLoading = true;
     });
     _retryFetch(
       category: FoodCategory.values[_tabController.index],
       type: _currentFilterType,
       shopId: widget.shopId,
-    );
+    ).then((_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   void _toggleNonVeg() {
     setState(() {
       _filter = _filter == FoodTypeFilter.nonVeg ? FoodTypeFilter.all : FoodTypeFilter.nonVeg;
+      _isLoading = true;
     });
     _retryFetch(
       category: FoodCategory.values[_tabController.index],
       type: _currentFilterType,
       shopId: widget.shopId,
-    );
-  }
-
-  List<Widget> getFoodInCategory(List<Food> menu) {
-    return FoodCategory.values.map((category) {
-      final categoryItems = menu.where((food) => food.category == category).toList();
-
-      return categoryItems.isEmpty
-          ? const Center(child: Text("No items in this category"))
-          : Padding(
-              padding: const EdgeInsets.all(8),
-              child: RefreshIndicator(
-                onRefresh: () => _retryFetch(
-                  category: category,
-                  type: _currentFilterType,
-                  shopId: widget.shopId,
-                ),
-                child: ListView.builder(
-                  key: ValueKey('${category.name}_${_filter.name}'),
-                  itemCount: categoryItems.length,
-                  itemBuilder: (_, i) => FoodTile(
-                    food: categoryItems[i],
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => FoodScreen(food: categoryItems[i])),
-                    ),
-                  ),
-                ),
-              ),
-            );
-    }).toList();
+    ).then((_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   @override
@@ -160,14 +179,63 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                 body: Consumer<FoodMenu>(builder: (context, foodMenu, _) {
                   final menu = foodMenu.menu;
 
-  
-
-                  return menu.isEmpty
-                      ? const Center(child: Text("Menu is empty"))
-                      : TabBarView(
-                          controller: _tabController,
-                          children: getFoodInCategory(menu),
-                        );
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(1.0, 0.0),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOut,
+                        )),
+                        child: child,
+                      );
+                    },
+                    child: _isLoading
+                        ? Center(
+                            key: const ValueKey('loading'),
+                            child: Lottie.asset(
+                              'assets/lottie/loader.json',
+                              width: 200,
+                              height: 200,
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : TabBarView(
+                            key: ValueKey<int>(_tabController.index),
+                            controller: _tabController,
+                            children: FoodCategory.values.map((category) {
+                              final categoryItems = menu.where((food) => food.category == category).toList();
+                              return categoryItems.isEmpty
+                                  ? Center(
+                                      key: ValueKey('empty_${category.name}'),
+                                      child: const Text("No items in this category"),
+                                    )
+                                  : Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: RefreshIndicator(
+                                        onRefresh: () => _retryFetch(
+                                          category: category,
+                                          type: _currentFilterType,
+                                          shopId: widget.shopId,
+                                        ),
+                                        child: ListView.builder(
+                                          key: ValueKey('${category.name}_${_filter.name}'),
+                                          itemCount: categoryItems.length,
+                                          itemBuilder: (_, i) => FoodTile(
+                                            food: categoryItems[i],
+                                            onTap: () => Navigator.of(context).push(
+                                              MaterialPageRoute(builder: (_) => FoodScreen(food: categoryItems[i])),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                            }).toList(),
+                          ),
+                  );
                 }),
               ),
             ),

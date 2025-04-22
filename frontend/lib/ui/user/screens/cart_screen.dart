@@ -17,6 +17,7 @@ import '../sheets/navbar.dart';
 import '../sheets/shared_prefs.dart';
 import 'timeline_screen.dart';
 import '../../../models/cart_item.dart';
+import 'package:lottie/lottie.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -342,21 +343,146 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildEmptyCartUI(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Image.asset('assets/empty.png', width: screenWidth * 0.5),
-          const SizedBox(height: 20),
-          const Text("Oops! Your cart is empty.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          const Text("Let's add some delicious food!", style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 20),
-          CustomButton(
-            label: 'Browse Menu 🍽️',
-            destination: CustomNavBar(),
-          )
-        ],
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFFF6F8FB),
+            const Color(0xFFEFF2F7),
+          ],
+        ),
+      ),
+      child: Center(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: screenWidth * 0.8,
+                      height: screenWidth * 0.8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            const Color(0xFF6366F1).withOpacity(0.1),
+                            const Color(0xFF8B5CF6).withOpacity(0.1),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(30),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF6366F1).withOpacity(0.1),
+                            blurRadius: 30,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: Lottie.asset(
+                        'assets/lottie/cart-empty.json',
+                        width: screenWidth * 0.4,
+                        height: screenWidth * 0.4,
+                        fit: BoxFit.contain,
+                        repeat: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 40),
+                Text(
+                  "Your cart is empty",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1F2937),
+                    letterSpacing: -0.5,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Let's add some delicious food!",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: const Color(0xFF6B7280),
+                    height: 1.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                Container(
+                  width: double.infinity,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6366F1).withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const CustomNavBar()),
+                        );
+                      },
+                      child: Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.restaurant_menu_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Browse Menu',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

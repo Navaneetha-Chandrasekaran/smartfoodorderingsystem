@@ -6,6 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart'; // For loading .env
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/cart_item.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../food_menu.dart';
 
 class OrderService {
   WebSocketChannel? _channel;
@@ -80,27 +82,35 @@ class OrderService {
         // Navigate to timeline screen with order details
         if (context.mounted) {
           print("🔄 Navigating to timeline screen...");
-          Navigator.pushReplacementNamed(
-            context,
-            '/timeline',
-            arguments: {
-              'order_id': data['order_id'].toString(),
-              'otp': data['otp'].toString(),
-              'items': cartItems.map((item) => {
-                'id': item.food.id.toString(),
-                'name': item.food.name,
-                'quantity': item.quantity,
-                'price': item.food.price,
-                'description': item.food.description,
-                'image_path': item.food.image,
-                'category': item.food.category.toString(),
-                'isVeg': item.food.isVeg,
-              }).toList(),
-              'payment_mode': paymentMethod,
-              'pickup_time': pickupTime,
-              'total_amount': totalAmount,
-            },
-          );
+          final orderData = {
+            'order_id': data['order_id'].toString(),
+            'otp': data['otp'].toString(),
+            'items': cartItems.map((item) => {
+              'id': item.food.id,
+              'name': item.food.name,
+              'quantity': item.quantity,
+              'price': item.food.price,
+              'description': item.food.description,
+              'image': item.food.image,
+              'isVeg': item.food.isVeg,
+              'total_item_price': item.food.price * item.quantity,
+            }).toList(),
+            'payment_mode': paymentMethod,
+            'pickup_time': pickupTime,
+            'total_amount': totalAmount,
+          };
+
+          // Store the order data in FoodMenu
+          await Provider.of<FoodMenu>(context, listen: false).setLatestOrderData(orderData);
+
+          if (context.mounted) {
+            print("🔄 Navigating to timeline screen with order data: $orderData");
+            Navigator.pushReplacementNamed(
+              context,
+              '/timeline',
+              arguments: orderData,
+            );
+          }
         }
         
         return {

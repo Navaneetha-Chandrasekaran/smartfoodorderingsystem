@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:lottie/lottie.dart';
 
 import '../../../models/constants.dart';
 import '../../../models/error_dialog.dart';
@@ -190,7 +191,14 @@ class _HomeScreenState extends State<HomeScreen> {
           future: _futureShops,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: Lottie.asset(
+                  'assets/lottie/loader.json',
+                  width: 200,
+                  height: 200,
+                  fit: BoxFit.contain,
+                ),
+              );
             } else if (snapshot.hasError) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 ErrorDialog.show(
