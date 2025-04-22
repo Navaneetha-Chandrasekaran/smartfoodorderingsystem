@@ -96,9 +96,48 @@ class _OrderConfirmationPopupState extends State<OrderConfirmationPopup>
   }
 }
 
-
-class OrderPlacedAnimation extends StatelessWidget {
+class OrderPlacedAnimation extends StatefulWidget {
   const OrderPlacedAnimation({super.key});
+
+  @override
+  State<OrderPlacedAnimation> createState() => _OrderPlacedAnimationState();
+}
+
+class _OrderPlacedAnimationState extends State<OrderPlacedAnimation> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.elasticOut,
+      ),
+    );
+
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeIn,
+      ),
+    );
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,9 +145,33 @@ class OrderPlacedAnimation extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Lottie.asset('assets/lottie/pay.json', width: 200, repeat: false),
-          SizedBox(height: 20),
-          Text("Order Placed Successfully!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          ScaleTransition(
+            scale: _scaleAnimation,
+            child: FadeTransition(
+              opacity: _opacityAnimation,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check,
+                  color: Colors.white,
+                  size: 60,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FadeTransition(
+            opacity: _opacityAnimation,
+            child: const Text(
+              "Order Placed Successfully!",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       ),
     );

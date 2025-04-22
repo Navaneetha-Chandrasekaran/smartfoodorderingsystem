@@ -47,12 +47,30 @@ class _CartTileState extends State<CartTile> {
                 // ✅ Food Image
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    getFullImageUrl(widget.cartItem.food.image),
+                  child: Container(
                     width: screenWidth * 0.2,
                     height: screenWidth * 0.2,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Icon(Icons.image_not_supported, size: screenWidth * 0.2),
+                    child: Image.network(
+                      getFullImageUrl(widget.cartItem.food.image),
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        print("❌ Error loading image: $error");
+                        return Container(
+                          color: Colors.grey[200],
+                          child: Icon(Icons.image_not_supported, color: Colors.grey),
+                        );
+                      },
+                    ),
                   ),
                 ),
                 SizedBox(width: screenWidth * 0.04),

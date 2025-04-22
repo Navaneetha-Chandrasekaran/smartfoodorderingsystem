@@ -16,6 +16,7 @@ import '../../../sheets/navigator.dart';
 import '../sheets/navbar.dart';
 import '../sheets/shared_prefs.dart';
 import 'timeline_screen.dart';
+import '../../../models/cart_item.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -41,154 +42,138 @@ class _CartScreenState extends State<CartScreen> {
       }
     });
   }
-
-  // void _placeOrder() async {
-  //   final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-  //   final shopId = await ShopService().getStoredShopId(); // Get the selected shopId
-
-  //   if (foodMenu.cart.isEmpty) return; // ✅ Prevent order placement when cart is empty
-
-  //   if (_selectedTime == null) {
-  //     setState(() => _showTimeError = true);
-  //     Future.delayed(const Duration(seconds: 3), () {
-  //       if (mounted) setState(() => _showTimeError = false);
-  //     });
-  //     return;
-  //   }
-
-  //   if (shopId == null) {
-  //     setState(() => _showTimeError = true); // Display an error if no shop is selected
-  //     Future.delayed(const Duration(seconds: 3), () {
-  //       if (mounted) setState(() => _showTimeError = false);
-  //     });
-  //     return;
-  //   }
-
-  //   setState(() => _isOrderProcessing = true);
-
-  //   // Simulate order placement delay
-  //   Future.delayed(const Duration(seconds: 5), () { // Combined loading + order placed delay
-  //     if (!mounted) return;
-
-  //     setState(() {
-  //       _isOrderProcessing = false;
-  //       _isOrderPlaced = true;
-  //     });
-
-  //     // Pass the necessary data (time, otp, payment method, and shopId) to place the order
-  //     foodMenu.placeOrder(_selectedTime, _otp, _selectedPayment, shopId);
-
-  //     Future.delayed(const Duration(seconds: 3), () {
-  //       if (mounted) {
-  //         setState(() => _isOrderPlaced = false);
-  //         Navigator.pushReplacement(
-  //           context,
-  //           MaterialPageRoute(builder: (context) => const TimelineScreen()),
-  //         );
-  //       }
-  //     });
-  //   });
-  // }
-
+  
   void _placeOrder() async {
-  final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-  final shopId = await ShopService().getStoredShopId(); // Get the selected shopId
-
-  // Retrieve userId from shared preferences using AuthService
-  final userId = await AuthService.getCurrentUserId(); // This uses the static method
-
-  print("🔍 ShopId: $shopId"); // Debug: Print shopId
-  print("🔍 UserId: $userId"); // Debug: Print userId
-
-  if (foodMenu.cart.isEmpty) {
-    print("❌ Cart is empty!"); // Debug: Cart is empty
-    return; // ✅ Prevent order placement when cart is empty
-  }
-
-  if (_selectedTime == null) {
-    print("❌ No pickup time selected!"); // Debug: No time selected
-    setState(() => _showTimeError = true);
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showTimeError = false);
-    });
-    return;
-  }
-
-  if (shopId == null) {
-    print("❌ No shop selected!"); // Debug: No shop selected
-    setState(() => _showTimeError = true); // Display an error if no shop is selected
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showTimeError = false);
-    });
-    return;
-  }
-
-  print("🔄 Placing order..."); // Debug: Order is being placed
-  setState(() => _isOrderProcessing = true);
-
-  // Now call the OrderService to place the order
-  final orderService = OrderService();
-
-  // Pass the data to place the order
-  final result = await orderService.placeOrder(
-    userId: userId.toString(),  // Pass the userId retrieved from shared preferences
-    shopId: shopId,
-    pickupTime: _selectedTime!.format(context), // Assuming you need the formatted time string
-    paymentMethod: _selectedPayment,
-    totalAmount: foodMenu.getTotalPrice(), // Pass total amount
-    cartItems: foodMenu.cart, // Pass cart items
-  );
-
-  print("📦 Order placement result: $result"); // Debug: Log the result of the API call
-
-  if (result.containsKey('error')) {
-    // Handle error (e.g., show a message to the user)
-    print("❌ Error placing order: ${result['error']}"); // Debug: Log error message
-    setState(() {
-      _isOrderProcessing = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result['error'])),
-    );
-    return;
-  }
-
-  // Success
-  setState(() {
-    _isOrderProcessing = false;
-    _isOrderPlaced = true;
-
-    // Check if 'otp' exists and is of a valid type
-    if (result['otp'] != null) {
-      _otp = result['otp'].toString();  // Convert it to a String if it's not null
-    } else {
-      _otp = null;  // Handle the case where OTP is missing
+    print("🛒 Starting order placement from cart screen...");
+    
+    // Check if user is logged in first
+    final userId = await AuthService.getCurrentUserId();
+    if (userId == null) {
+      print("❌ User not logged in, redirecting to login...");
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+      return;
     }
-  });
+    print("✅ User authenticated: $userId");
 
+    final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+    final shopId = await ShopService().getStoredShopId();
+    print("🏪 Shop ID: $shopId");
 
-  print("✔️ Order placed successfully. OTP: $_otp"); // Debug: Order placed successfully
+    if (foodMenu.cart.isEmpty) {
+      print("❌ Cart is empty!");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Your cart is empty!")),
+      );
+      return;
+    }
+    print("✅ Cart has ${foodMenu.cart.length} items");
 
-  // Navigate to the timeline screen
-  Future.delayed(const Duration(seconds: 5), () {
-    if (mounted) {
-      setState(() => _isOrderPlaced = false);
-      Navigator.pushReplacement(
+    if (_selectedTime == null) {
+      print("❌ No pickup time selected!");
+      setState(() => _showTimeError = true);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _showTimeError = false);
+      });
+      return;
+    }
+    print("✅ Pickup time selected: ${_selectedTime!.format(context)}");
+
+    if (shopId == null) {
+      print("❌ No shop selected!");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a shop first!")),
+      );
+      return;
+    }
+
+    print("🔄 Placing order...");
+    setState(() => _isOrderProcessing = true);
+
+    try {
+      // Store cart items before placing order
+      final List<CartItem> orderedItems = List.from(foodMenu.cart);
+      print("📦 Stored ${orderedItems.length} items for order");
+
+      final orderService = OrderService();
+      final result = await orderService.placeOrder(
+        userId: userId.toString(),
+        shopId: shopId,
+        pickupTime: _selectedTime!.format(context),
+        paymentMethod: _selectedPayment,
+        totalAmount: foodMenu.getTotalPrice(),
+        cartItems: orderedItems,
+        context: context,
+      );
+
+      print("📦 Order placement result: $result");
+
+      if (result.containsKey('error')) {
+        print("❌ Error placing order: ${result['error']}");
+        setState(() => _isOrderProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['error'])),
+        );
+        return;
+      }
+
+      // Clear the cart before showing success animation
+      foodMenu.clearCart();
+      print("✅ Cart cleared after successful order");
+
+      setState(() {
+        _isOrderProcessing = false;
+        _isOrderPlaced = true;
+        _otp = result['otp']?.toString();
+      });
+
+      print("✔️ Order placed successfully. OTP: $_otp");
+
+      // Show success animation for 2 seconds
+      await Future.delayed(const Duration(seconds: 2));
+
+      if (!mounted) return;
+
+      print("🔄 Preparing to navigate to timeline screen...");
+      print("📋 Order details - ID: ${result['order_id']}, OTP: ${result['otp']}");
+      
+      // Navigate to timeline screen with all necessary data
+      Navigator.pushReplacementNamed(
         context,
-        MaterialPageRoute(builder: (context) => const TimelineScreen()),
+        '/timeline',
+        arguments: {
+          'order_id': result['order_id'].toString(),
+          'otp': result['otp'].toString(),
+          'items': orderedItems.map((item) => {
+            'id': item.food.id.toString(),
+            'name': item.food.name,
+            'quantity': item.quantity,
+            'price': item.food.price,
+            'description': item.food.description,
+            'image_path': item.food.image,
+            'is_veg': item.food.isVeg,
+          }).toList(),
+          'payment_mode': _selectedPayment,
+          'pickup_time': _selectedTime!.format(context),
+          'total_amount': foodMenu.getTotalPrice(),
+        },
+      );
+    } catch (e) {
+      print("❌ Exception while placing order: $e");
+      setState(() => _isOrderProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error placing order: $e")),
       );
     }
-  });
-}
-
-
+  }
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
     final foodMenu = Provider.of<FoodMenu>(context);
     final userCart = foodMenu.cart;
-    final totalCost = foodMenu.getTotalPrice(); // ✅ Get total cost of cart
+    final totalCost = foodMenu.getTotalPrice();
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -222,22 +207,20 @@ class _CartScreenState extends State<CartScreen> {
       ),
       body: Stack(
         children: [
-          _isOrderProcessing
-              ? LoadingAnimation()
-              : _isOrderPlaced
-                  ? OrderPlacedAnimation()
-                  : userCart.isEmpty
-                      ? _buildEmptyCartUI(context)
-                      : Column(
-                          children: [
-                            Expanded(child: _buildCartItems(userCart)),
+          if (_isOrderProcessing)
+            const Center(child: CircularProgressIndicator())
+          else if (_isOrderPlaced)
+            const OrderPlacedAnimation()
+          else if (userCart.isEmpty)
+            _buildEmptyCartUI(context)
+          else
+            Column(
+              children: [
+                Expanded(child: _buildCartItems(userCart)),
+                _buildCheckoutSection(totalCost),
+              ],
+            ),
 
-                            // ✅ Floating Checkout Card
-                            _buildCheckoutSection(totalCost),
-                          ],
-                        ),
-
-          // ✅ Time Selection Error Popup
           if (_showTimeError) _buildTimeErrorPopup(),
         ],
       ),

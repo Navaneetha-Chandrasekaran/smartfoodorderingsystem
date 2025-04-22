@@ -221,6 +221,8 @@ class FoodMenu extends ChangeNotifier {
 
   // Fetch food menu from backend
   Future<void> fetchMenuFromBackend({FoodCategory? category, String? type, required int shopId}) async {
+
+    
     try {
       final categoryStr = category?.name.toLowerCase() ?? 'lunch';
       final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';

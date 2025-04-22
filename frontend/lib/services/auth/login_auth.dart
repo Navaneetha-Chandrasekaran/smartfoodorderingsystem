@@ -26,11 +26,22 @@ class AuthService {
 
         SharedPreferences prefs = await SharedPreferences.getInstance();
 
-        // ✅ Store user data locally
-        await prefs.setString('userId', data['userId'].toString());
-        await prefs.setString('email', data['email']);
-        await prefs.setString('name', data['name']);
-        // await prefs.setString('role', data['role']);
+        // Store user data locally with detailed logging
+        final userId = data['userId']?.toString();
+        print("🔑 Storing user ID: $userId");
+        await prefs.setString('userId', userId ?? '');
+        
+        final email = data['email']?.toString();
+        print("📧 Storing email: $email");
+        await prefs.setString('email', email ?? '');
+        
+        final name = data['name']?.toString();
+        print("👤 Storing name: $name");
+        await prefs.setString('name', name ?? '');
+
+        // Verify the stored data
+        final storedUserId = prefs.getString('userId');
+        print("✅ Verified stored user ID: $storedUserId");
 
         return {
           'success': true,
@@ -57,13 +68,28 @@ class AuthService {
   // ✅ Global Static Getters
 
   static Future<int?> getCurrentUserId() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    final userIdString = prefs.getString('userId');
-    print("🔍 Retrieved userId: $userIdString");
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      final userIdString = prefs.getString('userId');
+      print("🔍 Retrieved userId from SharedPreferences: $userIdString");
 
-    return (userIdString != null && userIdString.isNotEmpty)
-        ? int.tryParse(userIdString)
-        : null;
+      if (userIdString == null) {
+        print("⚠️ No userId found in SharedPreferences");
+        return null;
+      }
+
+      if (userIdString.isEmpty) {
+        print("⚠️ Empty userId string found in SharedPreferences");
+        return null;
+      }
+
+      final userId = int.tryParse(userIdString);
+      print("🔢 Parsed userId: $userId");
+      return userId;
+    } catch (e) {
+      print("❌ Error getting current user ID: $e");
+      return null;
+    }
   }
 
   static Future<String?> getCurrentEmail() async {

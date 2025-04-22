@@ -3,6 +3,9 @@
   import 'package:provider/provider.dart';
   import '../../../food_menu.dart';
   import '../../../models/cart_item.dart';
+import '../../../services/order_service.dart';
+import '../../../services/shop_service.dart';
+import 'dart:async';
 
   class CanteenDashboard extends StatefulWidget {
     const CanteenDashboard({super.key});
@@ -12,7 +15,50 @@
   }
 
   class _CanteenDashboardState extends State<CanteenDashboard> {
-    int nextOrderNumber = 1; // ✅ Order number sequence
+  final OrderService _orderService = OrderService();
+  Timer? _refreshTimer;
+  List<Map<String, dynamic>> _orders = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrders();
+    // Refresh orders every 10 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchOrders());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchOrders() async {
+    try {
+      final shopId = await ShopService().getStoredShopId();
+      if (shopId == null) return;
+
+      final orders = await _orderService.fetchOrders(shopId);
+      if (mounted) {
+        setState(() {
+          _orders = orders;
+        });
+      }
+    } catch (e) {
+      print('Error fetching orders: $e');
+    }
+  }
+
+  Future<void> _updateOrderStatus(String orderId, String newStatus) async {
+    try {
+      final success = await _orderService.updateOrderStatus(orderId, newStatus);
+      if (success) {
+        await _fetchOrders(); // Refresh orders after update
+      }
+    } catch (e) {
+      print('Error updating order status: $e');
+    }
+  }
 
     @override
     Widget build(BuildContext context) {
@@ -127,22 +173,19 @@
 
     /// ✅ **Upcoming Orders List**
     Widget _buildUpcomingOrders(FoodMenu foodMenu) {
-      final activeOrders = foodMenu.getActiveOrders();
-
-      return activeOrders.isEmpty
+    return _orders.isEmpty
           ? _buildEmptyOrders()
           : ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(), // Don't scroll inside main ListView
-              itemCount: activeOrders.length,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _orders.length,
               itemBuilder: (context, index) {
-                final order = activeOrders[index];
-                return _buildOrderTile(order, foodMenu, order.orderNumber);
+              final order = _orders[index];
+              return _buildOrderTile(order);
               },
             );
     }
-
 
     /// ✅ **Empty State Message**
     Widget _buildEmptyOrders() {
@@ -152,43 +195,12 @@
     }
 
     /// ✅ **Order Tile Design**
-    Widget _buildOrderTile(Order order, FoodMenu foodMenu, int orderNumber) {
-  double orderCost = order.items.fold(0, (total, item) => total + (item.food.price * item.quantity));
-
-  return StatefulBuilder(
-    builder: (context, setLocalState) {
-      if (order.readyTime != null && !order.expired) {
-        final now = DateTime.now();
-        final deadline = order.readyTime!.add(const Duration(minutes: 10));
-        final remaining = deadline.difference(now);
-
-        if (remaining.isNegative && !order.expired) {
-          // Expire the order
-          order.expired = true;
-          foodMenu.completeOrder(orderNumber); // Move it to completed
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            setState(() {}); // Refresh main screen
-          });
-        } else {
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted) setLocalState(() {});
-          });
-        }
-      }
-
-      String countdownText = "--:--";
-      Color timerColor = Colors.black;
-
-      if (order.readyTime != null && !order.expired) {
-        final deadline = order.readyTime!.add(const Duration(minutes: 10));
-        final remaining = deadline.difference(DateTime.now());
-
-        int minutes = remaining.inMinutes;
-        int seconds = remaining.inSeconds % 60;
-        countdownText = "${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}";
-
-        if (remaining.inMinutes < 2) timerColor = Colors.red;
-      }
+  Widget _buildOrderTile(Map<String, dynamic> order) {
+    final orderId = order['order_id'].toString();
+    final status = order['status'];
+    final items = List<Map<String, dynamic>>.from(order['items'] ?? []);
+    final totalAmount = order['total_amount'] ?? 0.0;
+    final otp = order['otp']?.toString() ?? '----';
 
       return Card(
         margin: const EdgeInsets.symmetric(vertical: 8),
@@ -202,16 +214,14 @@
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: order.expired ? Colors.red[100] : Colors.blue[100],
+                color: _getStatusColor(status).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  order.expired
-                      ? "⏱️ Order No: #$orderNumber (Expired)"
-                      : "Order No: #$orderNumber",
+                "Order #$orderId - ${_getStatusText(status)}",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: order.expired ? Colors.red : Colors.blue,
+                  color: _getStatusColor(status),
                     fontSize: 16,
                   ),
                 ),
@@ -220,19 +230,16 @@
 
               // Items
               Column(
-                children: order.items.map((item) {
+              children: items.map((item) {
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.asset(item.food.image, width: 60, height: 60, fit: BoxFit.cover),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Text(item.food.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: Text(item['name'] ?? '', 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
-                      Text("Qty: ${item.quantity}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text("Qty: ${item['quantity']}", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   );
                 }).toList(),
@@ -243,94 +250,56 @@
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Text("OTP: ${order.items.first.otp ?? "----"}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600])),
-                  Text("₹${orderCost.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
-                ],
-              ),
-              const SizedBox(height: 6),
-
-              // Countdown timer
-              if (order.readyTime != null)
-                Row(
-                  children: [
-                    const Icon(Icons.timer, size: 18, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Text(
-                      order.expired ? "Order Expired" : countdownText,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: order.expired ? Colors.red : timerColor,
-                      ),
-                    ),
-                  ],
-                ),
-
+                Text("OTP: $otp", 
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600])),
+                Text("₹${totalAmount.toStringAsFixed(2)}", 
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
+              ],
+            ),
               const SizedBox(height: 10),
 
               // Status Button
-              if (!order.expired) _buildStatusButton(order, foodMenu, orderNumber),
+            _buildStatusButton(orderId, status),
             ],
           ),
         ),
-      );
-    },
   );
 }
 
-
-
     /// ✅ **Status Button**
     /// ✅ **Status Button (Updated)**
-  Widget _buildStatusButton(Order order, FoodMenu foodMenu, int orderNumber) {
-  int step = foodMenu.getOrderStep(order);
+  Widget _buildStatusButton(String orderId, String currentStatus) {
   String buttonText;
   Color buttonColor;
+    String nextStatus;
 
-  switch (step) {
-    case 1:
+    switch (currentStatus) {
+      case 'Pending':
       buttonText = "Confirm Order";
       buttonColor = Colors.red;
+        nextStatus = 'Confirmed';
       break;
-    case 2:
-      buttonText = "Prepare Order";
-      buttonColor = Colors.yellow;
+      case 'Confirmed':
+        buttonText = "Start Preparing";
+        buttonColor = Colors.orange;
+        nextStatus = 'Preparing';
       break;
-    case 3:
+      case 'Preparing':
       buttonText = "Mark Ready";
-      buttonColor = Colors.orange;
+        buttonColor = Colors.blue;
+        nextStatus = 'Ready for Pickup';
       break;
-    case 4:
-      buttonText = "Completed";
+      case 'Ready for Pickup':
+        buttonText = "Complete Order";
       buttonColor = Colors.green;
+        nextStatus = 'Completed';
       break;
     default:
-      buttonText = "Next Step";
-      buttonColor = Colors.black;
+        return const SizedBox(); // Hide button for completed orders
   }
 
   return ElevatedButton(
-    onPressed: () {
-      if (step == 1) {
-        for (var item in order.items) {
-          final currentStock = item.food.availableQuantity;
-          final updatedStock = currentStock - item.quantity;
-          foodMenu.updateStock(item.food, updatedStock);
-        }
-        foodMenu.nextOrderStep(order.orderNumber);
-        setState(() {});
-      } else if (step == 3 && order.readyTime == null) {
-        // Just before moving to step 4
-        order.readyTime = DateTime.now();
-        foodMenu.nextOrderStep(order.orderNumber);
-        setState(() {});
-      } else if (step < 4) {
-        foodMenu.nextOrderStep(order.orderNumber);
-        setState(() {});
-      } else {
-        _verifyOTP(order, foodMenu, orderNumber);
-      }
-    },
+      onPressed: () => _updateOrderStatus(orderId, nextStatus),
     style: ElevatedButton.styleFrom(
       backgroundColor: buttonColor,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
@@ -343,73 +312,39 @@
   );
 }
 
-
-
-
-
-    /// ✅ **OTP Verification Dialog**
-    void _verifyOTP(Order order, FoodMenu foodMenu, int orderNumber) {
-  TextEditingController otpController = TextEditingController();
-
-  // ✅ No need to find the order again – it's already passed in
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("Verify OTP"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text("Enter the OTP received by the customer."),
-          const SizedBox(height: 10),
-          TextField(
-            controller: otpController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: "Enter OTP",
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel"),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final enteredOtp = otpController.text.trim();
-            // final actualOtp = order.items.first.otp;
-
-            // if (enteredOtp == actualOtp) {
-            //   foodMenu.completeOrder(order.orderNumber); // ✅ Move to completed
-            //   Navigator.pop(context);
-            //   setState(() {}); // ✅ Refresh dashboard to remove the order
-
-            //   ScaffoldMessenger.of(context).showSnackBar(
-            //     SnackBar(
-            //       content: Text("✅ Order #$orderNumber completed successfully!"),
-            //       backgroundColor: Colors.green,
-            //     ),
-            //   );
-            // } else {
-            //   ScaffoldMessenger.of(context).showSnackBar(
-            //     const SnackBar(
-            //       content: Text("❌ Incorrect OTP! Please try again."),
-            //       backgroundColor: Colors.red,
-            //     ),
-            //   );
-            // }
-          },
-          child: const Text("Verify"),
-        ),
-      ],
-    ),
-  );
-}
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Pending':
+        return Colors.red;
+      case 'Confirmed':
+        return Colors.orange;
+      case 'Preparing':
+        return Colors.blue;
+      case 'Ready for Pickup':
+        return Colors.green;
+      case 'Completed':
+        return Colors.grey;
+      default:
+        return Colors.black;
+    }
   }
 
-
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'Pending':
+        return 'Pending';
+      case 'Confirmed':
+        return 'Confirmed';
+      case 'Preparing':
+        return 'Preparing';
+      case 'Ready for Pickup':
+        return 'Ready for Pickup';
+      case 'Completed':
+        return 'Completed';
+      default:
+        return status;
+    }
+  }
 
     void _addRandomOrder(BuildContext context) {
     final foodMenu = Provider.of<FoodMenu>(context, listen: false);
@@ -433,4 +368,5 @@
 
     // Add the entire Order object
     foodMenu.addOrder(newOrder);  // Pass Order, not CartItem
+  }
   }

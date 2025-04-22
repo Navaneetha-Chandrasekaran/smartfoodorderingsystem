@@ -2,18 +2,27 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 String getFullImageUrl(String? imagePath) {
+  // If no image path is provided, return a proper network URL for placeholder
   if (imagePath == null || imagePath.isEmpty) {
-    return 'https://via.placeholder.com/150'; // Fallback
+    return 'https://via.placeholder.com/150';
   }
 
+  // If the image path is already a full URL, return it as is
+  if (imagePath.startsWith('http')) {
+    return imagePath;
+  }
+
+  // Get the base URL from environment variables
   String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  
+  // Remove /api suffix if present
   if (baseUrl.endsWith('/api')) {
     baseUrl = baseUrl.replaceFirst('/api', '');
   }
-
-  if (imagePath.startsWith('/')) {
-    imagePath = imagePath.substring(1);
-  }
-
-  return '$baseUrl/uploads/$imagePath';
+  
+  // Remove any leading slashes from the image path
+  String cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
+  
+  // Construct and return the full URL
+  return '$baseUrl/uploads/$cleanPath';
 }

@@ -30,7 +30,11 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
     super.initState();
     _tabController = TabController(length: FoodCategory.values.length, vsync: this);
     _tabController.addListener(_handleTabChange);
-    _retryFetch(shopId: widget.shopId); // Initial load
+    _retryFetch(
+      category: FoodCategory.values[_tabController.index],
+      type: _currentFilterType,
+      shopId: widget.shopId
+    ); // Initial load
   }
 
   void _handleTabChange() {
@@ -155,6 +159,9 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                 ],
                 body: Consumer<FoodMenu>(builder: (context, foodMenu, _) {
                   final menu = foodMenu.menu;
+
+  
+
                   return menu.isEmpty
                       ? const Center(child: Text("Menu is empty"))
                       : TabBarView(

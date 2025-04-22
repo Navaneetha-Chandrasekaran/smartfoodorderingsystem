@@ -12,6 +12,7 @@ import '../../../models/titles.dart';
 import '../../../sheets/navigator.dart';
 import 'isthara_screen.dart';
 import 'notification_screen.dart';
+import '../../../services/shop_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,32 +23,94 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Shop>> _futureShops;
+  String? _selectedShopId;
 
   @override
   void initState() {
     super.initState();
     _futureShops = fetchShops();
+    _loadSelectedShopId();
+  }
+
+  Future<void> _loadSelectedShopId() async {
+    try {
+      final shopService = ShopService();
+      final shopId = await shopService.getStoredShopId();
+      print("🔍 Loaded selected shop ID: $shopId");
+      if (mounted) {
+        setState(() {
+          _selectedShopId = shopId;
+        });
+      }
+    } catch (e) {
+      print("❌ Error loading selected shop ID: $e");
+    }
   }
 
   Future<List<Shop>> fetchShops() async {
-    final baseUrl = dotenv.env['API_BASE_URL'] ?? '';
-    if (baseUrl.isEmpty) throw Exception("API_BASE_URL not set in .env");
+    try {
+      final baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+      if (baseUrl.isEmpty) {
+        print("❌ API_BASE_URL is not set in .env");
+        throw Exception("API_BASE_URL not set in .env");
+      }
 
-    final url = Uri.parse('$baseUrl/shop/get-shops');
-    final response = await http.get(url);
+      print("🌐 Fetching shops from: $baseUrl/shop/get-shops");
+      final url = Uri.parse('$baseUrl/shop/get-shops');
+      
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final List<dynamic> shopsJson = data['shops'];
-      final shops = shopsJson.map((json) => Shop.fromJson(json)).toList();
-      shops.sort((a, b) => b.isOpen.toString().compareTo(a.isOpen.toString()));
-      return shops;
-    } else {
-      throw Exception('Failed to load shops');
+      final response = await http.get(url, headers: headers);
+      print("📥 Response status: ${response.statusCode}");
+      print("📥 Response body: ${response.body}");
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          if (data['shops'] == null) {
+            print("❌ No shops found in response");
+            return [];
+          }
+          
+          final List<dynamic> shopsJson = data['shops'];
+          final shops = shopsJson.map((json) => Shop.fromJson(json)).toList();
+          shops.sort((a, b) => b.isOpen.toString().compareTo(a.isOpen.toString()));
+          print("✅ Successfully loaded ${shops.length} shops");
+          
+          // Store the first shop's ID if no shop is selected
+          if (_selectedShopId == null && shops.isNotEmpty) {
+            final shopService = ShopService();
+            await shopService.storeSelectedShopId(shops[0].id);
+            _selectedShopId = shops[0].id;
+            print("📝 Stored default shop ID: ${shops[0].id}");
+          }
+          
+          return shops;
+        } catch (e) {
+          print("❌ Error parsing response: $e");
+          throw Exception("Failed to parse shops data: $e");
+        }
+      } else if (response.statusCode == 404) {
+        print("❌ Endpoint not found: ${response.statusCode}");
+        throw Exception("Shop endpoint not found. Please check the API configuration.");
+      } else if (response.statusCode == 500) {
+        print("❌ Server error: ${response.statusCode}");
+        throw Exception("Server error occurred. Please try again later.");
+      } else {
+        print("❌ Failed to load shops: ${response.statusCode}");
+        throw Exception("Failed to load shops: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ Error fetching shops: $e");
+      throw Exception("Failed to load shops: $e");
     }
   }
 
   void _retryFetch() {
+    print("🔄 Retrying shop fetch...");
     setState(() {
       _futureShops = fetchShops();
     });

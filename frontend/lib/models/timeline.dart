@@ -10,6 +10,8 @@ class Timeline extends StatelessWidget {
   final bool isLast;
   final bool isPast;
   final EventCard eventCard;
+  final String orderNumber;
+  final Set<String> animatedOrders;
 
   const Timeline({
     super.key,
@@ -17,6 +19,8 @@ class Timeline extends StatelessWidget {
     required this.isLast,
     required this.isPast,
     required this.eventCard,
+    required this.orderNumber,
+    required this.animatedOrders,
   });
 
   @override
@@ -46,8 +50,8 @@ class Timeline extends StatelessWidget {
         endChild: TimelineAnimation(
           isPast: isPast,
           child: eventCard,
-          orderNumber: '',
-          animatedOrders: {},
+          orderNumber: orderNumber,
+          animatedOrders: animatedOrders,
         ),
       ),
     );
