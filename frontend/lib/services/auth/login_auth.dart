@@ -29,7 +29,15 @@ class AuthService {
         // Store user data locally with detailed logging
         final userId = data['userId']?.toString();
         print("🔑 Storing user ID: $userId");
-        await prefs.setString('userId', userId ?? '');
+        if (userId != null && userId.isNotEmpty) {
+          await prefs.setString('userId', userId);
+        } else {
+          print("⚠️ Warning: No user ID received from server");
+          return {
+            'success': false,
+            'message': 'Login failed: No user ID received'
+          };
+        }
         
         final email = data['email']?.toString();
         print("📧 Storing email: $email");
@@ -48,8 +56,7 @@ class AuthService {
           'message': data['message'],
           'role': data['role'],
         };
-      }
-      else {
+      } else {
         final error = json.decode(response.body);
         return {
           'success': false,

@@ -28,8 +28,18 @@ class CartService {
   Future<Map<String, dynamic>> addToCart(String userId, String shopId, String foodId) async {
     final Uri url = Uri.parse('$baseUrl/cart/add');
 
+    // Ensure userId is a valid integer
+    final int? parsedUserId = int.tryParse(userId);
+    if (parsedUserId == null) {
+      print('❌ Invalid user ID format: $userId');
+      return {
+        'success': false,
+        'message': 'Invalid user ID format'
+      };
+    }
+
     final payload = {
-      'user_id': userId,
+      'user_id': parsedUserId,
       'shop_id': shopId,
       'food_id': foodId,
     };
@@ -41,14 +51,30 @@ class CartService {
         body: jsonEncode(payload),
       );
 
+      final responseData = json.decode(response.body);
+      
       if (response.statusCode == 200) {
-        return {'success': true, 'message': 'Item added to cart!'};
+        return {
+          'success': true,
+          'message': responseData['message'] ?? 'Item added to cart successfully'
+        };
       } else {
-        final error = json.decode(response.body);
-        return {'success': false, 'message': error['error'] ?? 'Unknown error'};
+        // Handle error response
+        final errorMessage = responseData['error'] ?? 
+                           responseData['message'] ?? 
+                           'Failed to add item to cart';
+        print('Cart error: $errorMessage'); // Debug log
+        return {
+          'success': false,
+          'message': errorMessage
+        };
       }
     } catch (e) {
-      return {'success': false, 'message': 'Error: $e'};
+      print('Network error adding to cart: $e'); // Debug log
+      return {
+        'success': false,
+        'message': 'Network error occurred. Please check your connection and try again.'
+      };
     }
   }
 

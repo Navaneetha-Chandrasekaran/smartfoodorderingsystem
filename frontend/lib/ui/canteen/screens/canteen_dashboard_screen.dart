@@ -6,6 +6,7 @@
 import '../../../services/order_service.dart';
 import '../../../services/shop_service.dart';
 import 'dart:async';
+import 'package:google_fonts/google_fonts.dart';
 
   class CanteenDashboard extends StatefulWidget {
     const CanteenDashboard({super.key});
@@ -199,72 +200,89 @@ import 'dart:async';
     final orderId = order['order_id'].toString();
     final status = order['status'];
     final items = List<Map<String, dynamic>>.from(order['items'] ?? []);
-    final totalAmount = order['total_amount'] ?? 0.0;
+    final totalAmount = order['total_amount'] is String 
+        ? double.tryParse(order['total_amount']) ?? 0.0
+        : (order['total_amount'] as num?)?.toDouble() ?? 0.0;
     final otp = order['otp']?.toString() ?? '----';
 
-      return Card(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              // Order Header
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-                decoration: BoxDecoration(
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            // Order Header
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+              decoration: BoxDecoration(
                 color: _getStatusColor(status).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
                 "Order #$orderId - ${_getStatusText(status)}",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
                   color: _getStatusColor(status),
-                    fontSize: 16,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Items
+            Column(
+              children: items.map((item) {
+                final quantity = item['quantity'] is String 
+                    ? int.tryParse(item['quantity']) ?? 0
+                    : (item['quantity'] as num?)?.toInt() ?? 0;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item['name'] ?? '', 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                      ),
+                    ),
+                    Text(
+                      "Qty: $quantity", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 8),
+
+            // OTP & Cost
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "OTP: $otp", 
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600])
+                ),
+                Text(
+                  "₹${totalAmount.toStringAsFixed(2)}",
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-
-              // Items
-              Column(
-              children: items.map((item) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                      child: Text(item['name'] ?? '', 
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      ),
-                    Text("Qty: ${item['quantity']}", 
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    ],
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 8),
-
-              // OTP & Cost
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                Text("OTP: $otp", 
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600])),
-                Text("₹${totalAmount.toStringAsFixed(2)}", 
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
               ],
             ),
-              const SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-              // Status Button
+            // Status Button
             _buildStatusButton(orderId, status),
-            ],
-          ),
+          ],
         ),
-  );
-}
+      ),
+    );
+  }
 
     /// ✅ **Status Button**
     /// ✅ **Status Button (Updated)**

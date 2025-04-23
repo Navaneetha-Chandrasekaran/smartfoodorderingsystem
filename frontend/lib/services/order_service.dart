@@ -207,6 +207,44 @@ class OrderService {
     }
   }
 
+  Future<bool> cancelOrder(String orderId, String reason) async {
+    try {
+      final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
+      final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
+      final uri = isSecure
+          ? Uri.https(host, '/api/orders/cancelorder')
+          : Uri.http(host, '/api/orders/cancelorder');
+
+      print("📤 Cancelling order: $uri");
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'order_id': orderId,
+          'reason': reason,
+        }),
+      );
+
+      print("📥 Received response: ${response.statusCode} - ${response.body}");
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          return data['success'] == true;
+        } catch (e) {
+          print("❌ Error parsing response: $e");
+          return false;
+        }
+      } else {
+        print("❌ Failed to cancel order: ${response.statusCode}");
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error cancelling order: $e');
+      return false;
+    }
+  }
+
   Timer? _pollingTimer;
 
   void initializeWebSocket(String userId, String shopId) {

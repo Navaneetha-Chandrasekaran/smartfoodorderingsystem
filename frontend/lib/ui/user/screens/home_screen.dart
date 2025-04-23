@@ -10,6 +10,7 @@ import '../../../models/constants.dart';
 import '../../../models/error_dialog.dart';
 import '../../../models/shop.dart';
 import '../../../models/titles.dart';
+import '../../../models/common_lottie.dart';
 import '../../../sheets/navigator.dart';
 import 'isthara_screen.dart';
 import 'notification_screen.dart';
@@ -192,12 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return Center(
-                child: Lottie.asset(
-                  'assets/lottie/loader.json',
-                  width: 200,
-                  height: 200,
-                  fit: BoxFit.contain,
-                ),
+                child: CommonLottie.loading(),
               );
             } else if (snapshot.hasError) {
               WidgetsBinding.instance.addPostFrameCallback((_) {

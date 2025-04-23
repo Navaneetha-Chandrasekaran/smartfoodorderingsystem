@@ -97,7 +97,12 @@ class _OrderConfirmationPopupState extends State<OrderConfirmationPopup>
 }
 
 class OrderPlacedAnimation extends StatefulWidget {
-  const OrderPlacedAnimation({super.key});
+  final VoidCallback onAnimationComplete;
+  
+  const OrderPlacedAnimation({
+    super.key,
+    required this.onAnimationComplete,
+  });
 
   @override
   State<OrderPlacedAnimation> createState() => _OrderPlacedAnimationState();
@@ -105,32 +110,26 @@ class OrderPlacedAnimation extends StatefulWidget {
 
 class _OrderPlacedAnimationState extends State<OrderPlacedAnimation> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
+  bool _hasNavigated = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 2500),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.elasticOut,
-      ),
-    );
-
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeIn,
-      ),
-    );
-
-    _controller.forward();
+    // Listen for animation status changes
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && !_hasNavigated) {
+        _hasNavigated = true;
+        // Add a delay before navigation
+        Future.delayed(const Duration(milliseconds: 800), () {
+          widget.onAnimationComplete();
+        });
+      }
+    });
   }
 
   @override
@@ -141,35 +140,55 @@ class _OrderPlacedAnimationState extends State<OrderPlacedAnimation> with Single
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Container(
+      color: Colors.white,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          ScaleTransition(
-            scale: _scaleAnimation,
-            child: FadeTransition(
-              opacity: _opacityAnimation,
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check,
-                  color: Colors.white,
-                  size: 60,
-                ),
-              ),
-            ),
+          Lottie.asset(
+            'assets/lottie/pay.json',
+            controller: _controller,
+            width: 300,
+            height: 300,
+            fit: BoxFit.contain,
+            onLoaded: (composition) {
+              _controller.duration = composition.duration;
+              _controller.forward();
+            },
           ),
-          const SizedBox(height: 20),
-          FadeTransition(
-            opacity: _opacityAnimation,
-            child: const Text(
-              "Order Placed Successfully!",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          const SizedBox(height: 32),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeOut,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 20 * (1 - value)),
+                  child: child,
+                ),
+              );
+            },
+            child: Column(
+              children: [
+                const Text(
+                  "Order Placed Successfully!",
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "Redirecting to order timeline...",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
             ),
           ),
         ],

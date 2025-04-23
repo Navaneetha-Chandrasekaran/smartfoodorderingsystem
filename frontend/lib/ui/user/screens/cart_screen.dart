@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../animations/loading.dart';
@@ -26,13 +28,15 @@ class CartScreen extends StatefulWidget {
   State<CartScreen> createState() => _CartScreenState();
 }
 
-class _CartScreenState extends State<CartScreen> {
+class _CartScreenState extends State<CartScreen> with SingleTickerProviderStateMixin {
   String _selectedPayment = "GPay";
   bool _isOrderProcessing = false;
   bool _isOrderPlaced = false;
   bool _showTimeError = false;
+  bool _canNavigate = false;
   TimeOfDay? _selectedTime; // ✅ Common time selector for the whole cart
   String? _otp;
+  late AnimationController _floatingController;
 
   @override
   void initState() {
@@ -42,10 +46,25 @@ class _CartScreenState extends State<CartScreen> {
         setState(() => _selectedPayment = value);
       }
     });
+    _floatingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _floatingController.dispose();
+    super.dispose();
   }
   
-  void _placeOrder() async {
+  Future<void> _placeOrder() async {
     print("🛒 Starting order placement from cart screen...");
+    
+    // Prevent multiple order placements
+    if (_isOrderProcessing || _isOrderPlaced) {
+      return;
+    }
     
     // Check if user is logged in first
     final userId = await AuthService.getCurrentUserId();
@@ -89,8 +108,12 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
-    print("🔄 Placing order...");
-    setState(() => _isOrderProcessing = true);
+    print("🔄 Processing order...");
+    setState(() {
+      _isOrderProcessing = true;
+      _isOrderPlaced = false;
+      _canNavigate = false;
+    });
 
     try {
       // Store cart items before placing order
@@ -110,6 +133,8 @@ class _CartScreenState extends State<CartScreen> {
 
       print("📦 Order placement result: $result");
 
+      if (!mounted) return;
+
       if (result.containsKey('error')) {
         print("❌ Error placing order: ${result['error']}");
         setState(() => _isOrderProcessing = false);
@@ -119,52 +144,70 @@ class _CartScreenState extends State<CartScreen> {
         return;
       }
 
-      // Clear the cart before showing success animation
-      foodMenu.clearCart();
-      print("✅ Cart cleared after successful order");
+      final orderData = {
+        'order_id': result['order_id'].toString(),
+        'otp': result['otp'].toString(),
+        'items': orderedItems.map((item) => {
+          'id': item.food.id,
+          'name': item.food.name,
+          'quantity': item.quantity,
+          'price': item.food.price,
+          'description': item.food.description,
+          'image': item.food.image,
+          'isVeg': item.food.isVeg,
+          'total_item_price': item.food.price * item.quantity,
+        }).toList(),
+        'payment_mode': _selectedPayment,
+        'pickup_time': _selectedTime!.format(context),
+        'total_amount': foodMenu.getTotalPrice(),
+      };
 
-      setState(() {
-        _isOrderProcessing = false;
-        _isOrderPlaced = true;
-        _otp = result['otp']?.toString();
-      });
+      try {
+        // Store the order data and clear cart
+        await Provider.of<FoodMenu>(context, listen: false).setLatestOrderData(orderData);
+        foodMenu.clearCart();
+        print("✅ Cart cleared and order data stored");
 
-      print("✔️ Order placed successfully. OTP: $_otp");
+        if (!mounted) return;
 
-      // Show success animation for 2 seconds
-      await Future.delayed(const Duration(seconds: 2));
+        // Show success animation
+        setState(() {
+          _isOrderProcessing = false;
+          _isOrderPlaced = true;
+          _otp = result['otp']?.toString();
+          _canNavigate = false;
+        });
 
-      if (!mounted) return;
+        print("✔️ Order placed successfully. OTP: $_otp");
+      } catch (e) {
+        print("❌ Error handling order success: $e");
+        if (mounted) {
+          setState(() => _isOrderProcessing = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error completing order: $e")),
+          );
+        }
+      }
 
-      print("🔄 Preparing to navigate to timeline screen...");
-      print("📋 Order details - ID: ${result['order_id']}, OTP: ${result['otp']}");
-      
-      // Navigate to timeline screen with all necessary data
+    } catch (e) {
+      print("❌ Exception while placing order: $e");
+      if (mounted) {
+        setState(() => _isOrderProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error placing order: $e")),
+        );
+      }
+    }
+  }
+
+  void _handleAnimationComplete() {
+    if (!_canNavigate && mounted && context.mounted) {
+      setState(() => _canNavigate = true);
+      print("🔄 Animation completed, navigating to timeline screen...");
       Navigator.pushReplacementNamed(
         context,
         '/timeline',
-        arguments: {
-          'order_id': result['order_id'].toString(),
-          'otp': result['otp'].toString(),
-          'items': orderedItems.map((item) => {
-            'id': item.food.id.toString(),
-            'name': item.food.name,
-            'quantity': item.quantity,
-            'price': item.food.price,
-            'description': item.food.description,
-            'image_path': item.food.image,
-            'is_veg': item.food.isVeg,
-          }).toList(),
-          'payment_mode': _selectedPayment,
-          'pickup_time': _selectedTime!.format(context),
-          'total_amount': foodMenu.getTotalPrice(),
-        },
-      );
-    } catch (e) {
-      print("❌ Exception while placing order: $e");
-      setState(() => _isOrderProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error placing order: $e")),
+        arguments: Provider.of<FoodMenu>(context, listen: false).latestOrderData,
       );
     }
   }
@@ -176,54 +219,70 @@ class _CartScreenState extends State<CartScreen> {
     final userCart = foodMenu.cart;
     final totalCost = foodMenu.getTotalPrice();
 
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: Titles(title: '🛒 Your Cart'),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: secondaryColor,
-        leading: InkWell(
-          onTap: () => Navigation.goBack(context),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Container(
-              width: screenWidth * 0.1,
-              height: screenWidth * 0.1,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Icon(
-                  Icons.arrow_back_ios,
-                  color: Colors.white,
-                  size: screenWidth * 0.05,
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isOrderPlaced || _isOrderProcessing) {
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: AppBar(
+          title: Titles(title: '🛒 Your Cart'),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: secondaryColor,
+          leading: (_isOrderPlaced || _isOrderProcessing)
+            ? null
+            : InkWell(
+                onTap: () => Navigation.goBack(context),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Container(
+                    width: screenWidth * 0.1,
+                    height: screenWidth * 0.1,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(50),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Icon(
+                        Icons.arrow_back_ios,
+                        color: Colors.white,
+                        size: screenWidth * 0.05,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
         ),
-      ),
-      body: Stack(
-        children: [
-          if (_isOrderProcessing)
-            const Center(child: CircularProgressIndicator())
-          else if (_isOrderPlaced)
-            const OrderPlacedAnimation()
-          else if (userCart.isEmpty)
-            _buildEmptyCartUI(context)
-          else
-            Column(
-              children: [
-                Expanded(child: _buildCartItems(userCart)),
-                _buildCheckoutSection(totalCost),
-              ],
-            ),
+        body: Stack(
+          children: [
+            if (_isOrderPlaced)
+              OrderPlacedAnimation(
+                onAnimationComplete: _handleAnimationComplete,
+              )
+            else if (_isOrderProcessing)
+              const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                ),
+              )
+            else if (userCart.isEmpty)
+              _buildEmptyCartUI(context)
+            else
+              Column(
+                children: [
+                  Expanded(child: _buildCartItems(userCart)),
+                  _buildCheckoutSection(totalCost),
+                ],
+              ),
 
-          if (_showTimeError) _buildTimeErrorPopup(),
-        ],
+            if (_showTimeError) _buildTimeErrorPopup(),
+          ],
+        ),
       ),
     );
   }
@@ -373,8 +432,8 @@ class _CartScreenState extends State<CartScreen> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            const Color(0xFF6366F1).withOpacity(0.1),
-                            const Color(0xFF8B5CF6).withOpacity(0.1),
+                            const Color(0xFF00FF00).withOpacity(0.1),
+                            const Color(0xFF008000).withOpacity(0.1),
                           ],
                         ),
                       ),
@@ -386,7 +445,7 @@ class _CartScreenState extends State<CartScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6366F1).withOpacity(0.1),
+                            color: const Color(0xFF00FF00).withOpacity(0.1),
                             blurRadius: 30,
                             spreadRadius: 5,
                           ),
@@ -402,26 +461,55 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 40),
-                Text(
-                  "Your cart is empty",
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1F2937),
-                    letterSpacing: -0.5,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "Let's add some delicious food!",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: const Color(0xFF6B7280),
-                    height: 1.5,
-                    fontWeight: FontWeight.w500,
+                SizedBox(height: screenWidth * 0.1),
+                AnimatedBuilder(
+                  animation: _floatingController,
+                  builder: (context, child) {
+                    return Transform.translate(
+                      offset: Offset(0, 10 * sin(_floatingController.value * pi)),
+                      child: child,
+                    );
+                  },
+                  child: Column(
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (bounds) => LinearGradient(
+                          colors: [
+                            const Color(0xFF00FF00),
+                            const Color(0xFF008000),
+                          ],
+                        ).createShader(bounds),
+                        child: const Text(
+                          "Your cart is empty",
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ShaderMask(
+                        shaderCallback: (bounds) => LinearGradient(
+                          colors: [
+                            const Color(0xFF00CC00),
+                            const Color(0xFF00FF00),
+                          ],
+                        ).createShader(bounds),
+                        child: const Text(
+                          "Let's add some delicious food!",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                            height: 1.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -429,15 +517,11 @@ class _CartScreenState extends State<CartScreen> {
                   width: double.infinity,
                   height: 56,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
+                    color: const Color(0xFFFF8C00),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF6366F1).withOpacity(0.3),
+                        color: const Color(0xFF00FF00).withOpacity(0.3),
                         blurRadius: 15,
                         spreadRadius: 2,
                         offset: const Offset(0, 4),

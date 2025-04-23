@@ -79,7 +79,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: _isLoggedIn ? const CustomNavBar() : const UserLoginScreen(),
+      home: CanteenNavBar(),
       theme: Provider.of<ThemeProvider>(context).themeData,
       routes: {
         '/login': (context) => const UserLoginScreen(),
@@ -90,6 +90,7 @@ class _MyAppState extends State<MyApp> {
         '/canteen-login': (context) => const CanteenLoginScreen(),
         '/onboard': (context) => const OnboardScreen(),
         '/user-selection': (context) => const UserSelectionScreen(),
+        '/menu': (context) => const CustomNavBar(),
       },
     );
   }
