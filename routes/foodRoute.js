@@ -27,6 +27,7 @@ router.all("/stocks", (req, res) => {
         db.query(sql, [req.query.shop_id], (err, results) => {
             if (err) return res.status(500).json({ error: "Database error" });
             return res.json(results);
+            
         });
 
     } else if (method === "PUT") {

@@ -1,11 +1,10 @@
 
 const db = require('../config/db');
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const User = require("../models/userModel");
 const dotenv = require("dotenv");
 const otpGenerator = require('otp-generator');
 const sendOTP = require('../config/email');
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -43,14 +42,13 @@ const registerUser = (table, name, email, phone, password, confirmPassword, res)
     bcrypt.hash(password, 10, (err, hashedPassword) => {
         if (err) return res.status(500).json({ message: 'Error hashing password' });
 
-        const otp = otpGenerator.generate(6, { upperCase: false, specialChars: false });
-
+        const otp = otpGenerator.generate(4, {digits:true,alphabets: false, upperCase: false, specialChars: false });
         const sql = `INSERT INTO ${table} (name, email, phone, password, otp, is_verified) VALUES (?, ?, ?, ?, ?, false)`;
         db.query(sql, [name, email, phone, hashedPassword, otp], (err, result) => {
             if (err) return res.status(500).json({ message: 'Email already exists' });
 
             sendOTP(email, otp)
-                .then(()=> res.json({ message: 'Registration successful. OTP sent to email.', email }))
+                .then(()=> res.json({ message: 'Registration successful. OTP sent to email.', email  }))
                 .catch(() => res.status(500).json({ message: 'Failed to send OTP' }));
                 
                       
@@ -145,8 +143,15 @@ exports.loginUser = (req, res) => {
             if (!match) {
                 return res.status(401).json({ message: 'Incorrect password' });
             }
+            const token = jwt.sign(
+                { id: user.id, email: user.email, role: user.role },  // Add any other claims as needed
+                process.env.JWT_SECRET,  // Ensure you have a secret key in your .env file
+                { expiresIn: '30d' }  // Set expiration time for the token
+            );
 
-            res.json({ message: 'Login successful', role: user.role });
+            res.json({  message: 'Login successful',
+            userId: user.id,   // This is the ID from your DB
+            token:token});
         });
     });
 };
@@ -206,4 +211,69 @@ exports.resetPassword = async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: "Server error", error });
     }
+};
+
+
+// 🔹 Resend OTP Function
+exports.resendOTP = (req, res) => {
+    const { email } = req.body; // Get email from request body
+
+    // Validate that email exists
+    if (!email) {
+        return res.status(400).json({ message: 'Email is required to resend OTP.' });
+    }
+
+    // Check if the user exists in students or canteen_staff
+    const checkStudentSql = `SELECT * FROM students WHERE email = ?`;
+    const checkCanteenStaffSql = `SELECT * FROM canteen_staff WHERE email = ?`;
+
+    // Check if the email exists in students table first
+    db.query(checkStudentSql, [email], (err, studentResults) => {
+        if (err) return res.status(500).json({ message: 'Database error while checking students email' });
+        
+        if (studentResults.length > 0) {
+            // If user is found in students table, generate OTP and update the students table
+            const otp = otpGenerator.generate(4, { digits: true, alphabets: false, specialChars: false });
+
+            const updateOtpSql = `UPDATE students SET otp = ?, is_verified = false WHERE email = ?`;
+            db.query(updateOtpSql, [otp, email], (err, result) => {
+                if (err) return res.status(500).json({ message: 'Error updating OTP in students table', details: err });
+
+                // Send OTP to email (assumes sendOTP function is set up correctly)
+                sendOTP(email, otp)
+                    .then(() => {
+                        res.json({ message: 'OTP resent successfully to student. Please check your email.' });
+                    })
+                    .catch(() => {
+                        res.status(500).json({ message: 'Failed to send OTP email.' });
+                    });
+            });
+        } else {
+            // If user is not found in students table, check in canteen_staff table
+            db.query(checkCanteenStaffSql, [email], (err, staffResults) => {
+                if (err) return res.status(500).json({ message: 'Database error while checking canteen staff email' });
+
+                if (staffResults.length > 0) {
+                    // If user is found in canteen_staff table, generate OTP and update the canteen_staff table
+                    const otp = otpGenerator.generate(4, { digits: true, alphabets: false, specialChars: false });
+
+                    const updateOtpSql = `UPDATE canteen_staff SET otp = ?, is_verified = false WHERE email = ?`;
+                    db.query(updateOtpSql, [otp, email], (err, result) => {
+                        if (err) return res.status(500).json({ message: 'Error updating OTP in canteen_staff table', details: err });
+
+                        // Send OTP to email (assumes sendOTP function is set up correctly)
+                        sendOTP(email, otp)
+                            .then(() => {
+                                res.json({ message: 'OTP resent successfully to canteen staff. Please check your email.' });
+                            })
+                            .catch(() => {
+                                res.status(500).json({ message: 'Failed to send OTP email.' });
+                            });
+                    });
+                } else {
+                    return res.status(400).json({ message: 'User not found in both students and canteen_staff.' });
+                }
+            });
+        }
+    });
 };

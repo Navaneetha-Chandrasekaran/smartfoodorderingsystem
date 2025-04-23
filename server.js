@@ -52,6 +52,14 @@ io.on("connection", (socket) => {
         socket.join(`canteen_${shop_id}`);
         console.log(`User joined Canteen Room: canteen_${shop_id}`);
     });
+    socket.on("shop_status_change", ({ shop_id, status }) => {
+        // Broadcast to all clients in that shop room
+        io.to(`canteen_${shop_id}`).emit("shop_status_update", {
+            shop_id,
+            status
+        });
+        console.log(`Shop status updated for shop ${shop_id}: ${status}`);
+    });
 
     socket.on("disconnect", () => {
         console.log("User disconnected:", socket.id);

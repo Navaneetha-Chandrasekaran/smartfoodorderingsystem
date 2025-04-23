@@ -12,4 +12,5 @@ router.post('/register/canteenstaff', authController.registerStaff);
 router.post('/verify-otp', authController.verifyOTP);
 router.post('/login', authController.loginUser);
 router.post('/resetpassword', authController.resetPassword);
+router.post('/resendotp', authController.resendOTP);
 module.exports = router;
