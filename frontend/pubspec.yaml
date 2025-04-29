@@ -47,6 +47,7 @@ dependencies:
   timeline_tile: ^2.0.0
   cached_network_image: ^3.4.1
   flutter_secure_storage: ^9.2.4
+  flutter_staggered_animations: ^1.1.1
 
 dev_dependencies:
   flutter_test:

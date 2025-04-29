@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:collection/collection.dart';
 import '../../../food.dart';
 import '../../../models/buttons.dart';
 import '../../../models/event_card.dart';
@@ -67,6 +66,7 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
   Map<String, dynamic>? _orderData;
   String? _selectedCancelReason;
   late AnimationController _floatingController;
+  VoidCallback? _wsCleanup;
 
   @override
   void initState() {
@@ -76,6 +76,51 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    // Register WebSocket status update callback
+    _orderService.setOnStatusUpdate((data) {
+      final orderId = data['order_id'].toString();
+      final newStatus = data['new_status'].toString().toLowerCase().replaceAll(' ', '_');
+      print("🔄 WebSocket update received: Order #$orderId status changed to $newStatus");
+      
+      // Always use setState to trigger UI update
+      if (mounted) {
+        setState(() {
+          // Update all orders with this ID
+          for (var order in orders) {
+            if (order['order_id'].toString() == orderId) {
+              print("📝 Updating order #$orderId from ${order['status']} to $newStatus");
+              order['status'] = newStatus;
+            }
+          }
+          
+          // If the selected order is the one updated, update its status too
+          if (selectedOrder != null && selectedOrder!['order_id'].toString() == orderId) {
+            selectedOrder = {
+              ...selectedOrder!,
+              'status': newStatus,
+            };
+            
+            // Force refresh by adding to animatedOrders set
+            animatedOrders.add(orderId);
+            
+            // Force the timeline to rebuild
+            print("🔄 Forcing timeline rebuild for order #$orderId");
+          }
+          
+          // Save changes to SharedPreferences
+          _saveOrderDataToPrefs();
+        });
+      }
+    });
+
+    // Initialize WebSocket connection (userId/shopId)
+    AuthService.getCurrentUserId().then((userId) async {
+      final shopId = await ShopService().getStoredShopId();
+      if (userId != null && shopId != null) {
+        _orderService.initializeWebSocket(userId.toString(), shopId);
+      }
+    });
   }
 
   @override
@@ -173,7 +218,10 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
         return;
       }
 
+      print("🔄 Fetching orders from backend...");
       final fetchedOrders = await _orderService.fetchOrders(shopId);
+      print("✅ Fetched ${fetchedOrders.length} orders from backend");
+      
       if (mounted) {
         setState(() {
           // Create a map to group items by order ID
@@ -212,7 +260,8 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
             processedOrderIds.add(orderId);
             
             // Ensure status is properly formatted
-            String status = orderData['status']?.toString().toLowerCase() ?? 'pending';
+            String status = orderData['status']?.toString().toLowerCase().replaceAll(' ', '_') ?? 'pending';
+            print("📊 Processing order #$orderId with status: $status");
             
             final processedOrder = {
               'order_id': orderId,
@@ -228,12 +277,59 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
             updatedOrders.add(processedOrder);
           }
           
+          // Keep existing completed/cancelled orders that might not be returned by the API
+          if (orders.isNotEmpty) {
+            print("🔍 Checking for completed orders to retain...");
+            for (var existingOrder in orders) {
+              final existingOrderId = existingOrder['order_id'].toString();
+              final existingStatus = existingOrder['status'].toString().toLowerCase();
+              
+              // Keep completed orders that might not be returned by the API
+              if ((existingStatus == 'completed' || existingStatus == 'cancelled') && 
+                  !processedOrderIds.contains(existingOrderId)) {
+                print("📋 Retaining completed order #$existingOrderId with status: $existingStatus");
+                updatedOrders.add(existingOrder);
+              }
+            }
+          }
+          
+          // Sort orders: pending first, then preparing, then ready_for_pickup, then completed
+          updatedOrders.sort((a, b) {
+            final statusA = a['status'].toString().toLowerCase();
+            final statusB = b['status'].toString().toLowerCase();
+            
+            // Define status priority (lower number = higher priority)
+            final getPriority = (String status) {
+              if (status == 'pending') return 0;
+              if (status == 'confirmed' || status == 'preparing') return 1;
+              if (status == 'ready_for_pickup') return 2;
+              if (status == 'completed') return 3;
+              if (status == 'cancelled') return 4;
+              return 5; // unknown status
+            };
+            
+            return getPriority(statusA).compareTo(getPriority(statusB));
+          });
+
           // Update the orders list
           orders = updatedOrders;
+          print("📱 Timeline now has ${orders.length} orders total (including completed)");
           
           // Set selected order if none is selected
           if (selectedOrder == null && orders.isNotEmpty) {
             selectedOrder = orders[0];
+          }
+          // If the selected order exists in the updated orders, update it
+          else if (selectedOrder != null) {
+            final currentOrderId = selectedOrder!['order_id'].toString();
+            // Try to find the selected order in the updated orders list
+            final matchingOrderIndex = orders.indexWhere(
+              (order) => order['order_id'].toString() == currentOrderId
+            );
+            
+            if (matchingOrderIndex != -1) {
+              selectedOrder = orders[matchingOrderIndex];
+            }
           }
         });
       }
@@ -245,6 +341,7 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
   @override
   void dispose() {
     _floatingController.dispose();
+    _orderService.setOnStatusUpdate((_) {}); // Remove callback by setting a no-op function
     _orderService.disconnect();
     super.dispose();
   }
@@ -734,7 +831,19 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
   }
 
   Widget _buildOrderStatus() {
+    final status = selectedOrder?['status']?.toString().toLowerCase() ?? 'pending';
+    print("🔍 Building order status for order with status: $status");
+    
+    // Calculate how many steps are completed based on status
+    int currentStep = 0;
+    if (status == 'pending') currentStep = 1;
+    else if (status == 'confirmed' || status == 'preparing') currentStep = 2;
+    else if (status == 'ready_for_pickup') currentStep = 3;
+    else if (status == 'completed') currentStep = 4;
+    else if (status == 'cancelled') currentStep = 0;
+
     return Container(
+      key: ValueKey('order-status-$currentStep-${selectedOrder?['order_id']}'),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -790,26 +899,26 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
                             'Order Placed',
                             'Your order has been received',
                             Icons.receipt_long,
-                            true,
+                            currentStep >= 1,
                             isFirst: true,
                           ),
                           _buildStatusStep(
                             'Preparing',
                             'Chef is preparing your food',
                             Icons.restaurant,
-                            false,
+                            currentStep >= 2,
                           ),
                           _buildStatusStep(
                             'Ready for Pickup',
                             'Your order is ready to collect',
                             Icons.takeout_dining,
-                            false,
+                            currentStep >= 3,
                           ),
                           _buildStatusStep(
                             'Completed',
                             'Order has been delivered',
                             Icons.check_circle,
-                            false,
+                            currentStep >= 4,
                             isLast: true,
                           ),
                         ],
@@ -826,7 +935,11 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
   }
 
   Widget _buildStatusStep(String title, String subtitle, IconData icon, bool isCompleted, {bool isFirst = false, bool isLast = false}) {
+    // Add a ValueKey to force complete rebuild when animation state changes
+    final animationKey = ValueKey('${title.toLowerCase().replaceAll(' ', '_')}-$isCompleted');
+
     return TimelineTile(
+      key: animationKey,
       isFirst: isFirst,
       isLast: isLast,
       beforeLineStyle: LineStyle(
@@ -836,67 +949,79 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
       indicatorStyle: IndicatorStyle(
         width: 40,
         height: 40,
-        indicator: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isCompleted 
-                ? [const Color(0xFF00FF00), const Color(0xFF00CC00)]
-                : [Colors.grey.shade300, Colors.grey.shade400],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        indicator: AnimatedScale(
+          scale: isCompleted ? 1.0 : 0.8,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.elasticOut,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isCompleted 
+                  ? [const Color(0xFF00FF00), const Color(0xFF00CC00)]
+                  : [Colors.grey.shade300, Colors.grey.shade400],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: (isCompleted ? const Color(0xFF00FF00) : Colors.grey).withOpacity(0.3),
+                  spreadRadius: 2,
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            shape: BoxShape.circle,
+            child: Icon(
+              isCompleted ? Icons.check : icon,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+        ),
+      ),
+      endChild: Container(
+        // Add visual animation when status changes
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isCompleted 
+              ? const Color(0xFF00FF00).withOpacity(isCompleted ? 0.2 : 0.1) 
+              : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: (isCompleted ? const Color(0xFF00FF00) : Colors.grey).withOpacity(0.3),
-                spreadRadius: 2,
+                color: (isCompleted ? const Color(0xFF00FF00) : Colors.grey).withOpacity(0.1),
+                spreadRadius: 1,
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
             ],
           ),
-          child: Icon(
-            isCompleted ? Icons.check : icon,
-            color: Colors.white,
-            size: 20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: isCompleted ? const Color(0xFF008000) : Colors.grey.shade800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isCompleted ? const Color(0xFF00CC00) : Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
-        ),
-      ),
-      endChild: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isCompleted ? const Color(0xFF00FF00).withOpacity(0.1) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: (isCompleted ? const Color(0xFF00FF00) : Colors.grey).withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: isCompleted ? const Color(0xFF008000) : Colors.grey.shade800,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 14,
-                color: isCompleted ? const Color(0xFF00CC00) : Colors.grey.shade600,
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1101,6 +1226,92 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
             child: const Text('Yes, Cancel Order'),
           ),
         ],
+      ),
+    );
+  }
+
+  // New method to save orders to SharedPreferences
+  Future<void> _saveOrderDataToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('all_orders', json.encode(orders));
+      print("💾 Saved all orders data to SharedPreferences");
+    } catch (e) {
+      print("❌ Error saving order data: $e");
+    }
+  }
+
+  Widget _buildOrderTimeline(Map<String, dynamic> order) {
+    final status = order['status'].toString().toLowerCase();
+    print("🔍 Building timeline for order #${order['order_id']} with status: $status");
+    
+    // Calculate how many steps are completed based on status
+    int currentStep = 0;
+    if (status == 'pending') currentStep = 1;
+    else if (status == 'confirmed' || status == 'preparing') currentStep = 2;
+    else if (status == 'ready_for_pickup') currentStep = 3;
+    else if (status == 'completed') currentStep = 4;
+    else if (status == 'cancelled') currentStep = 0;
+
+    final List<Map<String, dynamic>> timelineSteps = [
+      {
+        'title': 'Order Placed',
+        'subtitle': 'Your order has been received',
+        'time': 'Just now',
+        'isPast': currentStep >= 1,
+      },
+      {
+        'title': 'Order Confirmed',
+        'subtitle': 'Your order is being prepared',
+        'time': '5 mins',
+        'isPast': currentStep >= 2,
+      },
+      {
+        'title': 'Ready for Pickup',
+        'subtitle': 'Your food is ready to collect',
+        'time': '15 mins',
+        'isPast': currentStep >= 3,
+      },
+      {
+        'title': 'Order Completed',
+        'subtitle': 'Enjoy your meal!',
+        'time': '20 mins',
+        'isPast': currentStep >= 4,
+      },
+    ];
+
+    if (status == 'cancelled') {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cancel, color: Colors.red, size: 80),
+            SizedBox(height: 20),
+            Text('Order Cancelled', style: TextStyle(color: Colors.red, fontSize: 24)),
+            SizedBox(height: 10),
+            Text('This order has been cancelled.', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    // Build the timeline with animation
+    return Column(
+      children: List.generate(
+        timelineSteps.length,
+        (index) => Timeline(
+          isFirst: index == 0,
+          isLast: index == timelineSteps.length - 1,
+          isPast: timelineSteps[index]['isPast'] as bool,
+          eventCard: EventCard(
+            title: timelineSteps[index]['title'] as String,
+            subtitle: timelineSteps[index]['subtitle'] as String,
+            time: timelineSteps[index]['time'] as String,
+            isPast: timelineSteps[index]['isPast'] as bool,
+          ),
+          orderNumber: order['order_id'].toString(),
+          animatedOrders: animatedOrders,
+        ),
       ),
     );
   }

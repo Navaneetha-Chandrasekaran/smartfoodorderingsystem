@@ -145,21 +145,21 @@ class _CartScreenState extends State<CartScreen> with SingleTickerProviderStateM
       }
 
       final orderData = {
-        'order_id': result['order_id'].toString(),
-        'otp': result['otp'].toString(),
-        'items': orderedItems.map((item) => {
+          'order_id': result['order_id'].toString(),
+          'otp': result['otp'].toString(),
+          'items': orderedItems.map((item) => {
           'id': item.food.id,
-          'name': item.food.name,
-          'quantity': item.quantity,
-          'price': item.food.price,
-          'description': item.food.description,
+            'name': item.food.name,
+            'quantity': item.quantity,
+            'price': item.food.price,
+            'description': item.food.description,
           'image': item.food.image,
           'isVeg': item.food.isVeg,
           'total_item_price': item.food.price * item.quantity,
-        }).toList(),
-        'payment_mode': _selectedPayment,
-        'pickup_time': _selectedTime!.format(context),
-        'total_amount': foodMenu.getTotalPrice(),
+          }).toList(),
+          'payment_mode': _selectedPayment,
+          'pickup_time': _selectedTime!.format(context),
+          'total_amount': foodMenu.getTotalPrice(),
       };
 
       try {
@@ -192,9 +192,9 @@ class _CartScreenState extends State<CartScreen> with SingleTickerProviderStateM
     } catch (e) {
       print("❌ Exception while placing order: $e");
       if (mounted) {
-        setState(() => _isOrderProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error placing order: $e")),
+      setState(() => _isOrderProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error placing order: $e")),
         );
       }
     }
@@ -227,39 +227,39 @@ class _CartScreenState extends State<CartScreen> with SingleTickerProviderStateM
         return true;
       },
       child: Scaffold(
-        backgroundColor: Colors.grey[100],
-        appBar: AppBar(
-          title: Titles(title: '🛒 Your Cart'),
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: secondaryColor,
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: Titles(title: '🛒 Your Cart'),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: secondaryColor,
           leading: (_isOrderPlaced || _isOrderProcessing)
             ? null
             : InkWell(
-                onTap: () => Navigation.goBack(context),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Container(
-                    width: screenWidth * 0.1,
-                    height: screenWidth * 0.1,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                        size: screenWidth * 0.05,
-                      ),
-                    ),
-                  ),
+          onTap: () => Navigation.goBack(context),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Container(
+              width: screenWidth * 0.1,
+              height: screenWidth * 0.1,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Icon(
+                  Icons.arrow_back_ios,
+                  color: Colors.white,
+                  size: screenWidth * 0.05,
                 ),
               ),
+            ),
+          ),
         ),
-        body: Stack(
-          children: [
+      ),
+      body: Stack(
+        children: [
             if (_isOrderPlaced)
               OrderPlacedAnimation(
                 onAnimationComplete: _handleAnimationComplete,
@@ -270,18 +270,18 @@ class _CartScreenState extends State<CartScreen> with SingleTickerProviderStateM
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
                 ),
               )
-            else if (userCart.isEmpty)
-              _buildEmptyCartUI(context)
-            else
-              Column(
-                children: [
-                  Expanded(child: _buildCartItems(userCart)),
-                  _buildCheckoutSection(totalCost),
-                ],
-              ),
+          else if (userCart.isEmpty)
+            _buildEmptyCartUI(context)
+          else
+            Column(
+              children: [
+                Expanded(child: _buildCartItems(userCart)),
+                _buildCheckoutSection(totalCost),
+              ],
+            ),
 
-            if (_showTimeError) _buildTimeErrorPopup(),
-          ],
+          if (_showTimeError) _buildTimeErrorPopup(),
+        ],
         ),
       ),
     );

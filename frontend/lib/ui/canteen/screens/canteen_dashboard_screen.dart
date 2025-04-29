@@ -5,7 +5,22 @@
   import '../../../models/cart_item.dart';
 import '../../../services/order_service.dart';
 import '../../../services/shop_service.dart';
+import '../../../services/canteen_order_service.dart';
 import 'dart:async';
+import '../../../food.dart';
+import '../../../models/buttons.dart';
+import '../../../models/event_card.dart';
+import '../../../models/timeline.dart';
+import '../../../services/auth/login_auth.dart';
+import '../../../services/utils.dart';
+import '../../../models/common_lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timeline_tile/timeline_tile.dart';
+import '../../../animations/timeline_animation.dart';
+import '../../../models/constants.dart';
+import '../../../models/titles.dart';
+import 'dart:ui';
+import '../../../services/order_status_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
   class CanteenDashboard extends StatefulWidget {
@@ -15,137 +30,296 @@ import 'package:google_fonts/google_fonts.dart';
     State<CanteenDashboard> createState() => _CanteenDashboardState();
   }
 
-  class _CanteenDashboardState extends State<CanteenDashboard> {
+class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerProviderStateMixin {
   final OrderService _orderService = OrderService();
-  Timer? _refreshTimer;
-  List<Map<String, dynamic>> _orders = [];
+  final CanteenOrderService _canteenOrderService = CanteenOrderService();
+  final OrderStatusService _orderStatusService = OrderStatusService();
+  List<Map<String, dynamic>> orders = [];
+  bool isLoading = false;
+  late AnimationController _floatingController;
+  String? _currentShopId;
 
   @override
   void initState() {
     super.initState();
-    _fetchOrders();
-    // Refresh orders every 10 seconds
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchOrders());
+    _initializeFloatingController();
+    _initializeShopAndOrders();
+  }
+
+  void _initializeFloatingController() {
+    _floatingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _floatingController.dispose();
+    _orderService.disconnect();
     super.dispose();
   }
 
-  Future<void> _fetchOrders() async {
+  Future<void> _initializeShopAndOrders() async {
     try {
-      final shopId = await ShopService().getStoredShopId();
-      if (shopId == null) return;
-
-      final orders = await _orderService.fetchOrders(shopId);
-      if (mounted) {
-        setState(() {
-          _orders = orders;
-        });
+      final shopService = ShopService();
+      final shopId = await shopService.getStoredShopId();
+      if (shopId == null) {
+        print("⚠️ No shop ID found");
+        return;
       }
+
+      setState(() {
+        _currentShopId = shopId;
+        isLoading = true;
+      });
+
+      await _fetchOrders();
     } catch (e) {
-      print('Error fetching orders: $e');
+      print("❌ Error initializing orders: $e");
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
-  Future<void> _updateOrderStatus(String orderId, String newStatus) async {
+  Future<void> _fetchOrders() async {
+    if (_currentShopId == null) return;
+
     try {
-      final success = await _orderService.updateOrderStatus(orderId, newStatus);
-      if (success) {
-        await _fetchOrders(); // Refresh orders after update
+      print("🔄 Fetching orders for shop ID: $_currentShopId");
+      final fetchedOrders = await _canteenOrderService.fetchCanteenOrders(_currentShopId!);
+      print("✅ Fetched ${fetchedOrders.length} orders from backend");
+
+      if (mounted) {
+        setState(() {
+          // Store existing completed orders before updating
+          final existingCompletedOrders = orders.where((order) => 
+            order['status'].toString().toLowerCase() == 'completed' ||
+            order['status'].toString().toLowerCase() == 'cancelled'
+          ).toList();
+          
+          // Process new orders
+          orders = fetchedOrders.map((order) {
+            // Normalize status: lowercase, replace spaces with underscores
+            final rawStatus = order['status']?.toString() ?? '';
+            final normalizedStatus = rawStatus.toLowerCase().replaceAll(' ', '_');
+            return {
+              ...order,
+              'status': normalizedStatus,
+            };
+          }).toList();
+          
+          // Add back completed orders that weren't in the API response
+          final fetchedOrderIds = orders.map((o) => o['order_id'].toString()).toSet();
+          for (final completedOrder in existingCompletedOrders) {
+            final orderId = completedOrder['order_id'].toString();
+            if (!fetchedOrderIds.contains(orderId)) {
+              print("📋 Retaining completed order #$orderId in dashboard");
+              orders.add(completedOrder);
+            }
+          }
+          
+          // Sort orders by status priority
+          orders.sort((a, b) {
+            final statusA = a['status'].toString().toLowerCase();
+            final statusB = b['status'].toString().toLowerCase();
+            
+            // Define status priority (lower number = higher priority)
+            final getPriority = (String status) {
+              if (status == 'pending') return 0;
+              if (status == 'confirmed' || status == 'preparing') return 1;
+              if (status == 'ready_for_pickup') return 2;
+              if (status == 'completed') return 3;
+              if (status == 'cancelled') return 4;
+              return 5; // unknown status
+            };
+            
+            return getPriority(statusA).compareTo(getPriority(statusB));
+          });
+
+          print("📊 Dashboard now has ${orders.length} orders total (including completed)");
+          isLoading = false;
+        });
       }
     } catch (e) {
-      print('Error updating order status: $e');
+      print("❌ Error fetching orders: $e");
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
     @override
     Widget build(BuildContext context) {
-      return Consumer<FoodMenu>(
-        builder: (context, foodMenu, child) {
-          final totalOrders = foodMenu.getActiveOrders().length;
-          // final completedOrdersCount = foodMenu.getCompletedOrders().length; // Assuming this method exists
-          
-          return ListView(
-            children: [
-              // Header Section
-              _buildHeader(),
-              
-              // Order Summary Section
-              // _buildOrderSummary(context, totalOrders, completedOrdersCount),
-              
-              // Upcoming Orders Section
-              _buildUpcomingOrders(foodMenu),
-            ],
-          );
-        },
-      );
-    }
-
-    /// ✅ **Stylish Header with Gradient**
-    Widget _buildHeader() {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 35, horizontal: 20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF2ECC71), Color(0xFF27AE60)], // **Improved Green Gradient**
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(30),
-            bottomRight: Radius.circular(30),
-          ),
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "🍽️ Canteen Dashboard",
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            SizedBox(height: 5),
-            Text(
-              "Track orders, manage requests, and serve efficiently",
-              style: TextStyle(fontSize: 16, color: Colors.white70),
-            ),
-          ],
-        ),
-      );
-    }
-
-    /// ✅ **Order Summary with Live Updates**
-    Widget _buildOrderSummary(BuildContext context, int totalOrders, int completedOrdersCount) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
+    double screenWidth = MediaQuery.of(context).size.width;
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
         child: Container(
-          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5, spreadRadius: 1)],
+            gradient: LinearGradient(
+              colors: [
+                kLogoGreen,
+                Color(0xFF4AE578), // Lighter green
+                Color(0xFF5DF5A0), // Even lighter green
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: kLogoGreen.withOpacity(0.2),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+                spreadRadius: 1,
+              ),
+            ],
           ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
                 children: [
-                  _buildSummaryItem("📦 Total Orders", totalOrders.toString(), Colors.green),
-                  _buildSummaryItem("✅ Completed Orders", completedOrdersCount.toString(), Colors.blue),
+                  
+                  const SizedBox(width: 12),
+                  Row(
+                    children: [
+                      const SizedBox(width: 10),
+                      Center(child: SubTitles(title:'Canteen Dashboard', color: Colors.white,)),
+                    ],
+                  ),
+                  
+                  const Spacer(),
+                  
+                  // Refresh button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.refresh_rounded,
+                        color: kLogoGreen,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          isLoading = true;
+                        });
+                        _fetchOrders().then((_) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Dashboard refreshed'),
+                                backgroundColor: Colors.green,
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          }
+                        });
+                      },
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: () => _addRandomOrder(context),
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text("Add Order", style: TextStyle(color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Colors.purple.shade50,
+            ],
+          ),
+        ),
+        child: isLoading
+          ? Center(child: CommonLottie.loading())
+          : orders.isEmpty
+              ? Center(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CommonLottie.noOrders(),
+                        const SizedBox(height: 24),
+                        AnimatedBuilder(
+                          animation: _floatingController,
+                          builder: (context, child) {
+                            return Transform.translate(
+                              offset: Offset(0, 10 * sin(_floatingController.value * pi)),
+                              child: child,
+                            );
+                          },
+          child: Column(
+            children: [
+                              ShaderMask(
+                                shaderCallback: (bounds) => LinearGradient(
+                                  colors: [kLogoGreen, kLogoGreen.withOpacity(0.7)],
+                                ).createShader(bounds),
+                                child: const Titles(
+                                  title: 'No Orders Yet!',
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ShaderMask(
+                                shaderCallback: (bounds) => LinearGradient(
+                                  colors: [kLogoGreen.withOpacity(0.7), kLogoGreen],
+                                ).createShader(bounds),
+                                child: const Description(
+                                  description: 'New orders will appear here',
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Column(
+                  children: [
+                    _buildOrderSummary(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      child: Row(
+                        children: const [
+                          SubTitles(title: 'Recent Orders'),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                              _buildOrdersList(),
+                            ],
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -154,237 +328,549 @@ import 'package:google_fonts/google_fonts.dart';
       );
     }
 
-    /// ✅ **Order Summary Styling**
-    Widget _buildSummaryItem(String title, String value, Color color) {
-      return Column(
-        children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+  Widget _buildOrderSummary() {
+    final pendingOrders = orders.where((order) => 
+      order['status'].toString().toLowerCase() == 'pending').length;
+    final confirmedOrders = orders.where((order) => 
+      order['status'].toString().toLowerCase() == 'confirmed').length;
+    final completedOrders = orders.where((order) => 
+      order['status'].toString().toLowerCase() == 'completed').length;
+    final cancelledOrders = orders.where((order) => 
+      order['status'].toString().toLowerCase() == 'cancelled').length;
+    
+    // Total orders for percentage calculation
+    final totalOrders = pendingOrders + confirmedOrders + completedOrders + cancelledOrders;
+    
+    return Container(
+      margin: const EdgeInsets.only(left: 10, right: 10, top: 5, bottom: 5),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
-      );
-    }
-
-    /// ✅ **Upcoming Orders List**
-    Widget _buildUpcomingOrders(FoodMenu foodMenu) {
-    return _orders.isEmpty
-          ? _buildEmptyOrders()
-          : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _orders.length,
-              itemBuilder: (context, index) {
-              final order = _orders[index];
-              return _buildOrderTile(order);
-              },
-            );
-    }
-
-    /// ✅ **Empty State Message**
-    Widget _buildEmptyOrders() {
-      return const Center(
-        child: Text("No upcoming orders", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey)),
-      );
-    }
-
-    /// ✅ **Order Tile Design**
-  Widget _buildOrderTile(Map<String, dynamic> order) {
-    final orderId = order['order_id'].toString();
-    final status = order['status'];
-    final items = List<Map<String, dynamic>>.from(order['items'] ?? []);
-    final totalAmount = order['total_amount'] is String 
-        ? double.tryParse(order['total_amount']) ?? 0.0
-        : (order['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final otp = order['otp']?.toString() ?? '----';
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            // Order Header
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-              decoration: BoxDecoration(
-                color: _getStatusColor(status).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                "Order #$orderId - ${_getStatusText(status)}",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: _getStatusColor(status),
-                  fontSize: 16,
+      ),
+      child: Column(
+        children: [
+          // Header row with title and row of stats
+          Row(
+            children: [
+              // Title
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: kLogoGreen.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Items
-            Column(
-              children: items.map((item) {
-                final quantity = item['quantity'] is String 
-                    ? int.tryParse(item['quantity']) ?? 0
-                    : (item['quantity'] as num?)?.toInt() ?? 0;
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item['name'] ?? '', 
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
-                      ),
-                    ),
-                    Text(
-                      "Qty: $quantity", 
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 8),
-
-            // OTP & Cost
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "OTP: $otp", 
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[600])
-                ),
-                Text(
-                  "₹${totalAmount.toStringAsFixed(2)}",
-                  style: GoogleFonts.poppins(
-                    fontSize: 24,
+                child: Text(
+                  "ORDERS",
+                  style: GoogleFonts.montserrat(
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    letterSpacing: 0.5,
+                    color: kLogoGreen,
+                  ),
+                ),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Horizontal status bar
+              if (totalOrders > 0)
+                Expanded(
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      children: [
+                        if (pendingOrders > 0)
+                          Container(
+                            width: MediaQuery.of(context).size.width * 0.5 * (pendingOrders / totalOrders),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade600,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        if (confirmedOrders > 0)
+                          Container(
+                            width: MediaQuery.of(context).size.width * 0.5 * (confirmedOrders / totalOrders),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade500,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        if (completedOrders > 0)
+                          Container(
+                            width: MediaQuery.of(context).size.width * 0.5 * (completedOrders / totalOrders),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade500,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        if (cancelledOrders > 0)
+                          Container(
+                            width: MediaQuery.of(context).size.width * 0.5 * (cancelledOrders / totalOrders),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade400,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Compact status counters row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildCompactStatusCounter('Pending', pendingOrders, Colors.amber.shade600, Icons.pending_actions_rounded),
+              _buildCompactStatusCounter('Confirmed', confirmedOrders, Colors.blue.shade500, Icons.check_circle_outline_rounded),
+              _buildCompactStatusCounter('Completed', completedOrders, Colors.green.shade500, Icons.done_all_rounded),
+              _buildCompactStatusCounter('Cancelled', cancelledOrders, Colors.red.shade400, Icons.cancel_rounded),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactStatusCounter(String label, int count, Color color, IconData icon) {
+    return InkWell(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$label orders: $count'),
+            backgroundColor: color,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 4),
+                Text(
+                  count.toString(),
+                  style: GoogleFonts.montserrat(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-
-            // Status Button
-            _buildStatusButton(orderId, status),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: GoogleFonts.montserrat(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: Colors.black54,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-    /// ✅ **Status Button**
-    /// ✅ **Status Button (Updated)**
-  Widget _buildStatusButton(String orderId, String currentStatus) {
-  String buttonText;
-  Color buttonColor;
-    String nextStatus;
-
-    switch (currentStatus) {
-      case 'Pending':
-      buttonText = "Confirm Order";
-      buttonColor = Colors.red;
-        nextStatus = 'Confirmed';
-      break;
-      case 'Confirmed':
-        buttonText = "Start Preparing";
-        buttonColor = Colors.orange;
-        nextStatus = 'Preparing';
-      break;
-      case 'Preparing':
-      buttonText = "Mark Ready";
-        buttonColor = Colors.blue;
-        nextStatus = 'Ready for Pickup';
-      break;
-      case 'Ready for Pickup':
-        buttonText = "Complete Order";
-      buttonColor = Colors.green;
-        nextStatus = 'Completed';
-      break;
-    default:
-        return const SizedBox(); // Hide button for completed orders
+  Widget _buildOrdersList() {
+      return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: orders.map((order) => _buildOrderCard(order)).toList(),
+    );
   }
 
-  return ElevatedButton(
-      onPressed: () => _updateOrderStatus(orderId, nextStatus),
+  Widget _buildOrderCard(Map<String, dynamic> order) {
+    final status = order['status'].toString().toLowerCase();
+    final statusInfo = _getStatusInfo(status);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 22),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12.withOpacity(0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: kLogoGreen.withOpacity(0.10), width: 1.2),
+      ),
+      child: Column(
+        children: [
+          Container(
+            height: 6,
+            decoration: BoxDecoration(
+              color: kLogoGreen,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(22),
+                topRight: Radius.circular(22),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Row 1: Order number and status
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+                    SubTitles(
+                      title: 'Order #${order['order_id']}',
+                      color: Colors.black87,
+                      fontSize: 17,
+                    ),
+                    if (statusInfo != null)
+              Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                          color: statusInfo['color'].withOpacity(0.13),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(statusInfo['icon'], color: statusInfo['color'], size: 16),
+                            const SizedBox(width: 4),
+                            Description(
+                              description: statusInfo['label'],
+                              color: statusInfo['color'],
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                
+                // Row 2: OTP and Total price
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Description(
+                      description: 'OTP: ${order['otp']}',
+                      color: Colors.grey[700],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: kLogoGreen.withOpacity(0.09),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: SubTitles(
+                        title: '₹${order['total_amount']}',
+                        color: kLogoGreen,
+                    fontSize: 16,
+                  ),
+                ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                
+                // Row 3: Pickup Time
+                if (order['pickup_time'] != null)
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time, color: Colors.blue, size: 16),
+                      const SizedBox(width: 6),
+                      Description(
+                        description: 'Pickup at ${_formatPickupTime(order['pickup_time'])}',
+                        color: Colors.blue,
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          Divider(color: Colors.grey[200], thickness: 1, height: 0),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SubTitles(
+                  title: 'Ordered Items',
+                  color: Colors.black87,
+                  fontSize: 15,
+            ),
+              const SizedBox(height: 10),
+                ...(order['items'] as List<dynamic>).map((item) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: item['image'] != null && item['image'].toString().isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            getFullImageUrl(item['image']),
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 52,
+                                height: 52,
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.fastfood, color: Colors.grey),
+                              );
+                            },
+                          ),
+                        )
+                      : Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.fastfood, color: Colors.grey),
+                        ),
+                  title: FoodName(
+                    foodName: item['name']?.toString() ?? 'Unknown Item',
+                  ),
+                  subtitle: Description(
+                    description: 'Quantity: ${item['quantity']}',
+                    color: Colors.grey[600],
+                  ),
+                  trailing: FoodPrice(
+                    foodPrice: '₹${(item['price'] ?? 0.0).toStringAsFixed(2)}',
+                  ),
+                )).toList(),
+                const SizedBox(height: 16),
+                _buildStatusButton(order),
+              ],
+            ),
+          ),
+        ],
+        ),
+  );
+}
+
+  // Returns a map with label, color, and icon for the four main statuses
+  Map<String, dynamic>? _getStatusInfo(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return {'label': 'Confirm Order', 'color': Colors.orange, 'icon': Icons.pending_actions, 'next': 'preparing', 'button': 'Start Preparing'};
+      case 'confirmed': // treat as preparing
+      case 'preparing':
+        return {'label': 'Preparing', 'color': Colors.blue, 'icon': Icons.restaurant, 'next': 'ready_for_pickup', 'button': 'Ready for Pickup'};
+      case 'ready_for_pickup':
+        return {'label': 'Ready for Pickup', 'color': Colors.purple, 'icon': Icons.takeout_dining, 'next': 'completed', 'button': 'Mark as Completed'};
+      case 'completed':
+        return {'label': 'Completed', 'color': Colors.green, 'icon': Icons.done_all, 'button': 'Order Completed', 'next': 'completed'};
+    default:
+        return null;
+    }
+  }
+
+  Widget _buildStatusButton(Map<String, dynamic> order) {
+    final status = order['status'].toString().toLowerCase();
+    final statusInfo = _getStatusInfo(status);
+    if (statusInfo == null) {
+      return const SizedBox.shrink();
+    }
+    
+    // Different styling for completed orders
+    final isCompleted = status == 'completed';
+    
+    return Container(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: isCompleted ? null : () async {
+          final orderId = order['order_id'].toString();
+          final newStatus = statusInfo['next'];
+          
+          // Show a loading indicator while updating the status
+          setState(() {
+            // Add a temporary 'updating' field to the order
+            order['updating'] = true;
+          });
+          
+          final success = await _orderStatusService.updateOrderStatus(orderId, newStatus);
+          
+          if (success) {
+            setState(() {
+              // Remove the temporary 'updating' field
+              order.remove('updating');
+              
+              final idx = orders.indexWhere((o) => o['order_id'].toString() == orderId);
+              if (idx != -1) {
+                orders[idx]['status'] = newStatus;
+              }
+              
+              // If the order is now completed, ensure it stays visible in the dashboard
+              if (newStatus == 'completed') {
+                print("📋 Order #$orderId marked as completed - keeping it visible");
+              }
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Order status updated to $newStatus'), backgroundColor: Colors.green),
+            );
+          } else {
+            setState(() {
+              // Remove the temporary 'updating' field
+              order.remove('updating');
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Error updating order status'), backgroundColor: Colors.red),
+            );
+          }
+        },
     style: ElevatedButton.styleFrom(
-      backgroundColor: buttonColor,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ),
-    child: Text(
-      buttonText,
-      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          backgroundColor: isCompleted ? Colors.grey.shade300 : statusInfo['color'],
+          foregroundColor: isCompleted ? Colors.black87 : Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: order['updating'] == true 
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 20, 
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 10),
+                Text(
+                  "Updating...",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(isCompleted ? Icons.check_circle : Icons.update),
+                SizedBox(width: 8),
+                Text(
+                  statusInfo['button'],
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
     ),
   );
 }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Pending':
-        return Colors.red;
-      case 'Confirmed':
-        return Colors.orange;
-      case 'Preparing':
-        return Colors.blue;
-      case 'Ready for Pickup':
-        return Colors.green;
-      case 'Completed':
-        return Colors.grey;
-      default:
-        return Colors.black;
-    }
-  }
-
-  String _getStatusText(String status) {
-    switch (status) {
-      case 'Pending':
-        return 'Pending';
-      case 'Confirmed':
-        return 'Confirmed';
-      case 'Preparing':
-        return 'Preparing';
-      case 'Ready for Pickup':
-        return 'Ready for Pickup';
-      case 'Completed':
-        return 'Completed';
-      default:
-        return status;
-    }
-  }
-
-    void _addRandomOrder(BuildContext context) {
-    final foodMenu = Provider.of<FoodMenu>(context, listen: false);
-    final randomFood = foodMenu.menu[Random().nextInt(foodMenu.menu.length)];
+  String _formatPickupTime(dynamic pickupTime) {
+    if (pickupTime == null) return 'No pickup time';
     
-    // Create an Order instead of a single CartItem
-    final newOrder = Order(
-      orderNumber: foodMenu.nextOrderNumber,  // Generate order number
-      items: [
-        CartItem(
-          food: randomFood,
-          // selectedAddons: [],
-          quantity: Random().nextInt(3) + 1,
-          otp: (1000 + Random().nextInt(9000)).toString(),
-          paymentMode: Random().nextBool() ? "Cash" : "GPay", cartId: '',
-        ),
-      ],
-      pickupTime: TimeOfDay.now(),
-      orderPlacedTime: DateTime.now(), shopId: '',
-    );
-
-    // Add the entire Order object
-    foodMenu.addOrder(newOrder);  // Pass Order, not CartItem
+    try {
+      // Print the raw pickup time for debugging
+      print('Raw pickup time from backend: $pickupTime (${pickupTime.runtimeType})');
+      
+      // Normalize the pickup time to a string
+      final String timeStr = pickupTime.toString();
+      
+      // Check if the time is in ISO format (with T and possibly Z for UTC)
+      if (timeStr.contains('T')) {
+        try {
+          // Parse the ISO timestamp as UTC
+          DateTime utcDateTime = DateTime.parse(timeStr);
+          
+          // Convert to IST (UTC+5:30) regardless of local timezone
+          final istOffset = Duration(hours: 5, minutes: 30);
+          final istDateTime = utcDateTime.toUtc().add(istOffset);
+          print('Converted to IST: $istDateTime');
+          
+          // Format the time in 12-hour format with AM/PM
+          final hour = istDateTime.hour;
+          final minute = istDateTime.minute;
+          final period = hour < 12 ? 'AM' : 'PM';
+          final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+          final formattedTime = '$hour12:${minute.toString().padLeft(2, '0')} $period';
+          print('Formatted IST time: $formattedTime');
+          return formattedTime;
+        } catch (e) {
+          print('Error parsing ISO date: $e');
+        }
+      }
+      
+      // Handle standard format with space separator (YYYY-MM-DD HH:MM:SS)
+      if (timeStr.contains(' ') && timeStr.contains('-') && timeStr.contains(':')) {
+        try {
+          // Try to parse the datetime string as UTC
+          DateTime utcDateTime = DateTime.parse(timeStr.replaceAll(' ', 'T'));
+          
+          // Convert to IST (UTC+5:30)
+          final istOffset = Duration(hours: 5, minutes: 30);
+          final istDateTime = utcDateTime.toUtc().add(istOffset);
+          
+          // Format the time in 12-hour format with AM/PM
+          final hour = istDateTime.hour;
+          final minute = istDateTime.minute;
+          final period = hour < 12 ? 'AM' : 'PM';
+          final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+          final formattedTime = '$hour12:${minute.toString().padLeft(2, '0')} $period';
+          print('Formatted IST time from standard format: $formattedTime');
+          return formattedTime;
+        } catch (e) {
+          print('Error parsing standard date: $e');
+        }
+      }
+      
+      // Handle simple time format "HH:MM" or "HH:MM:SS"
+      if (timeStr.contains(':') && !timeStr.contains('-') && !timeStr.contains('T')) {
+        print('Simple time format detected: $timeStr');
+        // For simple time formats, assume they're already in IST
+        final timeParts = timeStr.split(':');
+        if (timeParts.length >= 2) {
+          final int? hour = int.tryParse(timeParts[0]);
+          final String minutes = timeParts[1].replaceAll(RegExp(r'[^\d]'), '');
+          
+          if (hour != null) {
+            final period = hour < 12 ? 'AM' : 'PM';
+            final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+            final formattedTime = '$hour12:$minutes $period';
+            print('Formatted simple time (assumed IST): $formattedTime');
+            return formattedTime;
+          }
+        }
+      }
+      
+      // If we couldn't parse it, show the raw value
+      print('Could not parse time format, returning raw: $timeStr');
+      return timeStr;
+    } catch (e) {
+      print('Error formatting pickup time: $e');
+      return 'Time available';
+    }
   }
   }

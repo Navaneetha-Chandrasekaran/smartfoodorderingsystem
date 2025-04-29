@@ -8,6 +8,9 @@ import '../sheets/navigator.dart';
 import 'shop.dart';
 import 'titles.dart';
 
+// Logo Colors
+const Color kLogoGreen = Color(0xFF00D943);   // Green from logo
+const Color kLogoOrange = Color(0xFFFF7C2B);  // Orange from logo
 
 //Primary color
 const LinearGradient primaryColor = LinearGradient(

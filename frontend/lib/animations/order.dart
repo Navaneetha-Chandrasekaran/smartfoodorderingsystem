@@ -173,7 +173,7 @@ class _OrderPlacedAnimationState extends State<OrderPlacedAnimation> with Single
             child: Column(
               children: [
                 const Text(
-                  "Order Placed Successfully!",
+              "Order Placed Successfully!",
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
