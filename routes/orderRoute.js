@@ -1,13 +1,13 @@
 const express = require("express");
-const { placeOrder, updateOrderStatus } = require("../controllers/orderController");
-const { verifyToken } = require("../middleware/authMiddleware");
-
 const router = express.Router();
+const db = require("../config/db");
+const orderController=require('../controllers/orderController');
 
-// 🛒 Place an Order (Student)
-router.post("/place", verifyToken, placeOrder);
-
-// 🔄 Update Order Status (Admin)
-router.put("/update/:orderId", verifyToken, updateOrderStatus);
-
+router.get("/getorder/:shop_id",orderController.getCanteenOrders);
+router.post("/placeorder",orderController.placeOrder);
+router.get("/pastorder/:shop_id",orderController.getPastOrders);
+router.put("/updateorder",orderController.updateOrderStatus);
+router.post("/verifyotp",orderController.verifyOrderOtp);
+router.get("/fetchorders",orderController.getUserOrders);
+router.get("/orderhistory",orderController.getUserOrderHistory);
 module.exports = router;

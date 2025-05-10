@@ -1,181 +1,162 @@
-const db = require('../config/db');
+const db = require("../config/db");
+const jwt = require('jsonwebtoken');
 
-exports.addToCart = (req, res) => {
-    const { user_id, food_id, quantity, extra_items } = req.body;
+// Middleware to validate JWT and extract user info
+const validateToken = (req, res, next) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
 
-    if (!user_id || !food_id || !quantity) {
-        return res.status(400).json({ error: 'All fields are required' });
+    if (!token) {
+        return res.status(401).json({ error: "No token provided" });
     }
 
-    const sql = `
-        INSERT INTO cart (user_id, food_id, quantity, extra_items)
-        VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE quantity = quantity + ?;
-    `;
-
-    db.query(sql, [user_id, food_id, quantity, JSON.stringify(extra_items), quantity], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Item added to cart successfully' });
-    });
+    try {
+        // Verify the token and decode it to extract user information
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded; // Attach the decoded user info to the request object
+        next();
+    } catch (err) {
+        return res.status(403).json({ error: "Invalid or expired token",details:err});
+    }
 };
-exports.getCart = (req, res) => {
-    const { user_id } = req.params;
+
+// Add item to cart
+exports.addToCart = [validateToken, (req, res) => {
+    const { shop_id, food_id } = req.body;
+    const user_id = req.user.id; // Get user_id from the decoded token
+
+    if (!shop_id || !food_id) {
+        return res.status(400).json({ error: "All fields are required!" });
+    }
+
+    const sql = "INSERT INTO cart (user_id, shop_id, food_id) VALUES (?, ?, ?)";
+    db.query(sql, [user_id, shop_id, food_id], (err, result) => {
+        if (err) return res.status(500).json({ error: "Database error",details:err });
+        res.json({ message: "Item added to cart!" });
+    });
+}];
+
+// Fetch cart items
+exports.getCartItems = [validateToken, (req, res) => {
+    const user_id = req.user.id; // Get user_id from the decoded token
+
+    if (!user_id) return res.status(400).json({ error: "User ID required!" });
 
     const sql = `
-        SELECT c.id, f.name AS food_name, c.quantity, c.extra_items, f.price 
+        SELECT c.id AS cart_id, f.id AS food_id, f.name, f.image, f.price, f.category
         FROM cart c
         JOIN food_items f ON c.food_id = f.id
-        WHERE c.user_id = ?;
+        WHERE c.user_id = ?
     `;
 
     db.query(sql, [user_id], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) return res.status(500).json({ error: "Database error" });
         res.json(results);
     });
-};
-exports.updateQuantity = (req, res) => {
-    const { cart_id, quantity } = req.body;
+}];
 
-    if (!cart_id || quantity < 1) {
-        return res.status(400).json({ error: 'Invalid quantity' });
-    }
-
-    const sql = `UPDATE cart SET quantity = ? WHERE id = ?`;
-
-    db.query(sql, [quantity, cart_id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Quantity updated successfully' });
-    });
-};
-exports.removeItem = (req, res) => {
+// Remove item from cart
+exports.removeCartItem = [validateToken, (req, res) => {
     const { cart_id } = req.params;
+    const user_id = req.user.id; // Get user_id from the decoded token
 
-    const sql = `DELETE FROM cart WHERE id = ?`;
-
-    db.query(sql, [cart_id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Item removed from cart' });
-    });
-};
-exports.updateDeliveryPayment = (req, res) => {
-    const { user_id, delivery_time, payment_method } = req.body;
-
-    if (!user_id || !delivery_time || !payment_method) {
-        return res.status(400).json({ error: 'All fields are required' });
+    if (!cart_id) {
+        return res.status(400).json({ error: "Cart ID is required!" });
     }
 
-    const sql = `UPDATE cart SET delivery_time = ?, payment_method = ? WHERE user_id = ?`;
+    const sql = "DELETE FROM cart WHERE id = ? AND user_id = ?";
+    db.query(sql, [cart_id, user_id], (err, result) => {
+        if (err) {
+            console.error("Database Error:", err);
+            return res.status(500).json({ error: "Database error, please try again later" });
+        }
 
-    db.query(sql, [delivery_time, payment_method, user_id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Delivery time & payment method updated' });
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Cart item not found!" });
+        }
+
+        res.json({ message: "Item removed from cart!" });
     });
-};
-const generateOTP = () => Math.floor(100000 + Math.random() * 900000); // 6-digit OTP
+}];
 
-exports.checkout = (req, res) => {
-    const { user_id } = req.body;
+// Clear cart after placing order
+exports.clearCart = [validateToken, (req, res) => {
+    const user_id = req.user.id; // Get user_id from the decoded token
 
-    if (!user_id) return res.status(400).json({ error: 'User ID is required' });
-
-    // Generate OTP
-    const otp = generateOTP();
-
-    // Fetch cart details
-    const sql = `SELECT * FROM cart WHERE user_id = ?`;
-
-    db.query(sql, [user_id], (err, cartItems) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        if (cartItems.length === 0) return res.status(400).json({ error: 'Cart is empty' });
-
-        // Store order in orders table
-        const orderSql = `INSERT INTO orders (user_id, items, delivery_time, payment_method, otp) VALUES (?, ?, ?, ?, ?)`;
-
-        db.query(
-            orderSql,
-            [user_id, JSON.stringify(cartItems), cartItems[0].delivery_time, cartItems[0].payment_method, otp],
-            (err, result) => {
-                if (err) return res.status(500).json({ error: err.message });
-
-                // Clear cart after checkout
-                db.query(`DELETE FROM cart WHERE user_id = ?`, [user_id]);
-
-                res.json({
-                    message: 'Order placed successfully',
-                    otp,
-                    order_id: result.insertId
-                });
-            }
-        );
+    const sql = "DELETE FROM cart WHERE user_id = ?";
+    db.query(sql, [user_id], (err, result) => {
+        if (err) return res.status(500).json({ error: "Database error" });
+        res.json({ message: "Cart cleared!" });
     });
-};
-
-
+}];
 
 
 
 // const db = require("../config/db");
 
-// // Add to Cart
+// // Add item to cart
 // exports.addToCart = (req, res) => {
-//     const { user_id, food_id, quantity } = req.body;
+//     const { user_id, shop_id, food_id } = req.body;
 
-//     db.query("SELECT * FROM cart WHERE user_id = ? AND food_id = ?", [user_id, food_id], (err, results) => {
+//     if (!user_id || !shop_id || !food_id) {
+//         return res.status(400).json({ error: "All fields are required!" });
+//     }
+
+//     const sql = "INSERT INTO cart (user_id, shop_id, food_id) VALUES (?, ?, ?)";
+//     db.query(sql, [user_id, shop_id, food_id], (err, result) => {
 //         if (err) return res.status(500).json({ error: "Database error" });
-
-//         if (results.length > 0) {
-//             db.query("UPDATE cart SET quantity = quantity + ? WHERE user_id = ? AND food_id = ?", [quantity, user_id, food_id], (err) => {
-//                 if (err) return res.status(500).json({ error: "Database error" });
-//                 res.json({ message: "Cart updated successfully" });
-//             });
-//         } else {
-//             db.query("INSERT INTO cart (user_id, food_id, quantity) VALUES (?, ?, ?)", [user_id, food_id, quantity], (err) => {
-//                 if (err) return res.status(500).json({ error: "Database error" });
-//                 res.json({ message: "Item added to cart" });
-//             });
-//         }
+//         res.json({ message: "Item added to cart!" });
 //     });
 // };
 
-// //  Get Cart Items
-// exports.getCart = (req, res) => {
-//     const user_id = req.params.user_id;
+// // Fetch cart items
+// exports.getCartItems = (req, res) => {
+//     const { user_id } = req.params;
 
-//     db.query(
-//         `SELECT cart.id, cart.food_id, food.name, food.price, cart.quantity, (food.price * cart.quantity) AS total_price 
-//          FROM cart JOIN food ON cart.food_id = food.id WHERE cart.user_id = ?`,
-//         [user_id],
-//         (err, results) => {
-//             if (err) return res.status(500).json({ error: "Database error" });
-//             res.json(results);
-//         }
-//     );
-// };
+//     if (!user_id) return res.status(400).json({ error: "User ID required!" });
 
-// // Update Cart (Increase/Decrease Quantity)
-// exports.updateCart = (req, res) => {
-//     const { cart_id, quantity } = req.body;
+//     const sql = `
+//         SELECT c.id AS cart_id, f.id AS food_id, f.name, f.image, f.price, f.category
+//         FROM cart c
+//         JOIN food_items f ON c.food_id = f.id
+//         WHERE c.user_id = ?
+//     `;
 
-//     if (quantity <= 0) {
-//         db.query("DELETE FROM cart WHERE id = ?", [cart_id], (err) => {
-//             if (err) return res.status(500).json({ error: "Database error" });
-//             res.json({ message: "Item removed from cart" });
-//         });
-//     } else {
-//         db.query("UPDATE cart SET quantity = ? WHERE id = ?", [quantity, cart_id], (err) => {
-//             if (err) return res.status(500).json({ error: "Database error" });
-//             res.json({ message: "Cart updated successfully" });
-//         });
-//     }
-// };
-
-// //  Clear Cart After Order
-// exports.clearCart = (req, res) => {
-//     const user_id = req.params.user_id;
-
-//     db.query("DELETE FROM cart WHERE user_id = ?", [user_id], (err) => {
+//     db.query(sql, [user_id], (err, results) => {
 //         if (err) return res.status(500).json({ error: "Database error" });
-//         res.json({ message: "Cart cleared" });
+//         res.json(results);
+//     });
+// };
+
+// // Remove item from cart
+// exports.removeCartItem = (req, res) => {
+//     const { cart_id } = req.params;
+
+//     if (!cart_id) {
+//         return res.status(400).json({ error: "Cart ID is required!" });
+//     }
+
+//     const sql = "DELETE FROM cart WHERE id = ?";
+//     db.query(sql, [cart_id], (err, result) => {
+//         if (err) {
+//             console.error("Database Error:", err);
+//             return res.status(500).json({ error: "Database error, please try again later" });
+//         }
+
+//         if (result.affectedRows === 0) {
+//             return res.status(404).json({ error: "Cart item not found!" });
+//         }
+
+//         res.json({ message: "Item removed from cart!" });
+//     });
+// };
+
+// // Clear cart after placing order
+// exports.clearCart = (req, res) => {
+//     const { user_id } = req.params;
+
+//     const sql = "DELETE FROM cart WHERE user_id = ?";
+//     db.query(sql, [user_id], (err, result) => {
+//         if (err) return res.status(500).json({ error: "Database error" });
+//         res.json({ message: "Cart cleared!" });
 //     });
 // };

@@ -7,5 +7,6 @@ router.post('/add-shop', shopController.createShop);
 router.get('/get-shops', (req, res) => {
     shopController.getShops(req, res);
 });
+router.put('/updatestatus',shopController.updateShopStatus);
 
 module.exports = router;
