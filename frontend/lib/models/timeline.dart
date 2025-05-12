@@ -12,6 +12,7 @@ class Timeline extends StatelessWidget {
   final EventCard eventCard;
   final String orderNumber;
   final Set<String> animatedOrders;
+  final bool isRefreshing;
 
   const Timeline({
     super.key,
@@ -21,6 +22,7 @@ class Timeline extends StatelessWidget {
     required this.eventCard,
     required this.orderNumber,
     required this.animatedOrders,
+    this.isRefreshing = false,
   });
 
   @override
@@ -52,6 +54,7 @@ class Timeline extends StatelessWidget {
           child: eventCard,
           orderNumber: orderNumber,
           animatedOrders: animatedOrders,
+          isRefreshing: isRefreshing,
         ),
       ),
     );

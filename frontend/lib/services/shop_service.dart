@@ -35,7 +35,12 @@ class ShopService {
   }
 
   // Store the shop ID in local storage
-  Future<void> storeSelectedShopId(String shopId) async {
+  Future<void> storeSelectedShopId(String? shopId) async {
+    if (shopId == null) {
+      print("Cannot store null Shop ID");
+      return;
+    }
+    
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       bool isStored = await prefs.setString('selectedShopId', shopId);
@@ -64,8 +69,13 @@ class ShopService {
 
   // Get shop ID dynamically from the selected shop (assumes `Shop` has an `id` field)
   Future<int?> getSelectedShopId(Shop selectedShop) async {
+    if (selectedShop.id == null) {
+      print("Shop has null ID");
+      return null;
+    }
+    
     try {
-      int? shopId = int.tryParse(selectedShop.id); // Assuming 'id' is a string, and you want to parse it into an integer
+      int? shopId = int.tryParse(selectedShop.id!); // Using null assertion since we already checked above
       print("Selected Shop ID: $shopId");
       return shopId;
     } catch (e) {

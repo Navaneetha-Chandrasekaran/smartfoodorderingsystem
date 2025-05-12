@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // class SignupAuth {
 //   final String baseUrl = dotenv.env['API_BASE_URL']!; // ✅ Use correct API URL
@@ -62,15 +63,29 @@ class SignupAuth {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         
-        // Capture the user ID
-        String userId = data['userId']; // Assuming the userId is returned by the backend
-        await storage.write(key: 'userId', value: userId); // Securely store the user ID
+        // If registration returns a token (normally would happen after OTP verification)
+        if (data['token'] != null) {
+          final token = data['token'];
+          final userId = data['userId']?.toString();
+
+          // Store user data in SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('token', token);
+          
+          if (userId != null) {
+            await prefs.setString('userId', userId);
+          }
+          
+          await prefs.setString('email', email);
+          await prefs.setString('name', name);
+          await prefs.setString('role', data['role'] ?? 'student');
+        }
 
         return {
           'success': true,
           'message': data['message'],
           'email': data['email'],
-          'userId': userId, // Include userId in the response
+          'userId': data['userId'], // Include userId in the response
         };
       } else {
         final error = json.decode(response.body);
@@ -113,6 +128,25 @@ class CanteenReg {
       if (response.statusCode == 200) {
         try {
           final data = json.decode(response.body);
+          
+          // If registration returns a token (normally would happen after OTP verification)
+          if (data['token'] != null) {
+            final token = data['token'];
+            final userId = data['userId']?.toString();
+
+            // Store user data in SharedPreferences
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('token', token);
+            
+            if (userId != null) {
+              await prefs.setString('userId', userId);
+            }
+            
+            await prefs.setString('email', email);
+            await prefs.setString('name', name);
+            await prefs.setString('role', data['role'] ?? 'canteen_staff');
+          }
+          
           return {'success': true, 'message': data['message'], 'email': data['email']};
         } catch (e) {
           return {'success': false, 'message': 'Invalid JSON response: $e'};

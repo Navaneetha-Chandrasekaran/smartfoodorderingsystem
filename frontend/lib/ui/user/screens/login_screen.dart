@@ -58,7 +58,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
 
     try {
       print("⏳ Sending login request...");
-      final response = await _authService.loginUser(email, password);
+      final response = await _authService.loginUser(email, password, 'student');
       print("✅ API Response: $response");
 
       if (response['success']) {

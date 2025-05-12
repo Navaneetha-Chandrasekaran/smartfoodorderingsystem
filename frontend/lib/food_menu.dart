@@ -89,16 +89,90 @@ class FoodMenu extends ChangeNotifier {
     }
   }
 
-  Future<void> setLatestOrderData(Map<String, dynamic> orderData) async {
-    if (_latestOrderData != orderData) {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_orderDataKey, json.encode(orderData));
-        _latestOrderData = orderData;
-        notifyListeners();
-      } catch (e) {
-        print('Error saving order data: $e');
+  Future<bool> setLatestOrderData(Map<String, dynamic> orderData) async {
+    try {
+      // Create a deep copy to avoid reference issues
+      final orderCopy = Map<String, dynamic>.from(orderData);
+      
+      // Ensure items are deeply copied and properly formatted
+      if (orderData.containsKey('items')) {
+        final items = orderData['items'] as List<dynamic>;
+        
+        // Debug log raw items
+        print("📦 Processing ${items.length} items for storage - checking image paths:");
+        for (var item in items) {
+          if (item is Map) {
+            final rawImagePath = item['image']?.toString() ?? '';
+            print("   🖼️ Item: ${item['name']}, Image Path: $rawImagePath");
+          }
+        }
+        
+        // Deep copy with all required fields
+        orderCopy['items'] = items.map((item) {
+          if (item is Map) {
+            return {
+              'id': item['id']?.toString() ?? item['food_id']?.toString() ?? '',
+              'food_id': item['food_id']?.toString() ?? item['id']?.toString() ?? '',
+              'name': item['name']?.toString() ?? 'Unknown Item',
+              'quantity': item['quantity'] is int ? item['quantity'] : 
+                        (item['quantity'] is String ? int.tryParse(item['quantity']) ?? 1 : 1),
+              'price': item['price'] is num ? item['price'] : 
+                      (item['price'] is String ? double.tryParse(item['price']) ?? 0.0 : 0.0),
+              'total_price': item['total_price'] is num ? item['total_price'] :
+                            (item['total_item_price'] is num ? item['total_item_price'] : 
+                             (item['price'] is num && item['quantity'] is num ? 
+                              (item['price'] as num) * (item['quantity'] as num) : 0.0)),
+              'total_item_price': item['total_item_price'] is num ? item['total_item_price'] :
+                                 (item['total_price'] is num ? item['total_price'] : 
+                                  (item['price'] is num && item['quantity'] is num ? 
+                                   (item['price'] as num) * (item['quantity'] as num) : 0.0)),
+              'description': item['description']?.toString() ?? '',
+              'image': item['image']?.toString() ?? '',
+              'isVeg': item['isVeg'] is bool ? item['isVeg'] : true,
+              'category': item['category']?.toString() ?? '',
+            };
+          } else {
+            // Fallback for non-map items
+            return {
+              'id': '',
+              'food_id': '',
+              'name': 'Unknown Item',
+              'quantity': 1,
+              'price': 0.0,
+              'total_price': 0.0,
+              'total_item_price': 0.0,
+              'description': '',
+              'image': '',
+              'isVeg': true,
+              'category': '',
+            };
+          }
+        }).toList();
+      } else {
+        // Ensure there's at least an empty items array
+        orderCopy['items'] = [];
       }
+      
+      print("💾 Storing order data with ${orderCopy['items'].length} items in provider and SharedPreferences");
+      
+      // Log the items being stored
+      for (var item in orderCopy['items']) {
+        print("   📝 Stored Item: ${item['name']}, price=${item['price']}, quantity=${item['quantity']}");
+      }
+      
+      // Store the copied data
+      _latestOrderData = orderCopy;
+      
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_orderDataKey, json.encode(orderCopy));
+      print("✅ Order data saved to SharedPreferences");
+      
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print("❌ Error storing order data: $e");
+      return false;
     }
   }
 
@@ -318,5 +392,165 @@ class FoodMenu extends ChangeNotifier {
   void updateFilter(String? type) {
     _currentTypeFilter = type?.toLowerCase().replaceAll('_', ' ');
     _applyFilter();
+  }
+
+  // Check if an order with given order ID is cancelled
+  Future<bool> checkIfOrderIsCancelled(String orderId) async {
+    if (orderId.isEmpty) return false;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final completedOrdersJson = prefs.getString('completed_orders') ?? '[]';
+      
+      List<dynamic> completedOrders;
+      try {
+        final decodedJson = json.decode(completedOrdersJson);
+        if (decodedJson is List) {
+          completedOrders = decodedJson;
+        } else if (decodedJson is Map) {
+          completedOrders = [decodedJson];
+        } else {
+          completedOrders = [];
+        }
+      } catch (e) {
+        print("❌ Error parsing completed orders: $e");
+        completedOrders = [];
+      }
+      
+      // Check if the order ID is in the cancelled orders list
+      return completedOrders.any((order) {
+        if (order is Map) {
+          final storedOrderId = order['order_id']?.toString() ?? '';
+          final storedStatus = order['status']?.toString()?.toLowerCase() ?? '';
+          final isCancelled = order['is_cancelled'] == true || 
+                              order['cancel_reason'] != null;
+          
+          return storedOrderId == orderId && 
+                 (storedStatus == 'cancelled' || isCancelled);
+        }
+        return false;
+      });
+    } catch (e) {
+      print("❌ Error checking if order is cancelled: $e");
+      return false;
+    }
+  }
+  
+  // Mark an order as cancelled
+  Future<void> markOrderAsCancelled(String orderId, String reason) async {
+    if (_latestOrderData != null && 
+        _latestOrderData!['order_id']?.toString() == orderId) {
+      
+      print("🚫 Marking order #$orderId as cancelled in provider");
+      
+      // Update the status on the latest order data
+      _latestOrderData!['status'] = 'cancelled';
+      _latestOrderData!['is_cancelled'] = true;
+      _latestOrderData!['cancel_reason'] = reason;
+      _latestOrderData!['cancelled_at'] = DateTime.now().toIso8601String();
+      
+      // Save the updated data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_orderDataKey, json.encode(_latestOrderData));
+      
+      // Also check if we need to update completed orders storage
+      final completedOrdersJson = prefs.getString('completed_orders') ?? '[]';
+      
+      List<dynamic> completedOrders;
+      try {
+        final decodedJson = json.decode(completedOrdersJson);
+        if (decodedJson is List) {
+          completedOrders = decodedJson;
+        } else if (decodedJson is Map) {
+          completedOrders = [decodedJson];
+        } else {
+          completedOrders = [];
+        }
+      } catch (e) {
+        print("❌ Error parsing completed orders: $e");
+        completedOrders = [];
+      }
+      
+      // Check if the order is already in completed orders
+      bool orderExists = false;
+      for (int i = 0; i < completedOrders.length; i++) {
+        if (completedOrders[i] is Map && 
+            completedOrders[i]['order_id']?.toString() == orderId) {
+          orderExists = true;
+          // Update the cancelled status
+          completedOrders[i]['status'] = 'cancelled';
+          completedOrders[i]['is_cancelled'] = true;
+          completedOrders[i]['cancel_reason'] = reason;
+          completedOrders[i]['cancelled_at'] = _latestOrderData!['cancelled_at'];
+          break;
+        }
+      }
+      
+      // If not found, add it
+      if (!orderExists) {
+        completedOrders.add(_latestOrderData);
+        print("➕ Added order #$orderId to completed_orders with cancelled status");
+      }
+      
+      // Save back to shared preferences
+      await prefs.setString('completed_orders', json.encode(completedOrders));
+      
+      // Set the cancelled flag
+      _isOrderCancelled = true;
+      
+      notifyListeners();
+    }
+  }
+  
+  // Get shop name by shop ID
+  String? getShopNameById(String shopId) {
+    if (shopId.isEmpty) return null;
+    
+    // Map of known shop IDs to shop names - update this based on your available shops
+    final Map<String, String> shopNames = {
+      '1': 'Campus Cafe',
+      '2': 'Byte Food Court',
+      '3': 'Code Canteen',
+      '4': 'Developer\'s Deli',
+      '5': 'Engineering Eats',
+      // Add more shops as needed
+    };
+    
+    // Try to get from the map
+    final name = shopNames[shopId];
+    
+    // If found, return it
+    if (name != null) {
+      return name;
+    }
+    
+    // If not found in the map, check if it's in latest order data
+    if (_latestOrderData != null && 
+        _latestOrderData!['shop_id']?.toString() == shopId && 
+        _latestOrderData!['shop_name'] != null) {
+      return _latestOrderData!['shop_name'].toString();
+    }
+    
+    // Last resort: return a formatted version of the ID
+    return 'Shop #$shopId';
+  }
+  
+  // Clear all orders data on logout
+  Future<void> clearAllOrdersData() async {
+    try {
+      print("🗑️ Clearing all orders data from provider");
+      _latestOrderData = null;
+      _orders.clear();
+      _upcomingOrders.clear();
+      _completedOrders.clear();
+      _lastOrderedItems.clear();
+      _isOrderCancelled = false;
+      
+      // Not clearing from SharedPreferences as we keep cancelled orders for history
+      
+      notifyListeners();
+    } catch (e) {
+      print("❌ Error clearing all orders data: $e");
+    }
   }
 }

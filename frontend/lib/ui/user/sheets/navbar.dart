@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import '../../../main.dart'; // Import the main file for the error handler
 import '../screens/home_screen.dart';
 import '../screens/cart_screen.dart';
 import '../screens/profile_screen.dart';
@@ -15,18 +16,100 @@ class CustomNavBar extends StatefulWidget {
 
 class _CustomNavBarState extends State<CustomNavBar> {
   int _selectedIndex = 0;
-
-  final List<Widget> _screens = [
-    HomeScreen(),
-    CartScreen(),
-    TimelineScreen(),
-    ProfileScreen(),
+  // List of screen widgets wrapped in error handling
+  late final List<Widget> _screens;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Initialize screens with error handling
+    _initializeScreens();
+  }
+  
+  void _initializeScreens() {
+    try {
+      _screens = [
+        _buildErrorHandlingScreen(() => HomeScreen()),
+        _buildErrorHandlingScreen(() => CartScreen()),
+        _buildErrorHandlingScreen(() => TimelineScreen()),
+        _buildErrorHandlingScreen(() => ProfileScreen()),
   ];
+    } catch (e) {
+      print("❌ Error initializing screens: $e");
+      // Show error on next frame when context is available
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showErrorMessage("Error initializing navigation: $e");
+      });
+    }
+  }
+  
+  // Wrap each screen in an error boundary
+  Widget _buildErrorHandlingScreen(Widget Function() builder) {
+    return Builder(
+      builder: (context) {
+        try {
+          return builder();
+        } catch (e) {
+          print("❌ Screen build error: $e");
+          return _buildErrorScreen(e.toString());
+        }
+      },
+    );
+  }
+  
+  // Error screen to display when a screen fails to load
+  Widget _buildErrorScreen(String errorMessage) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 60,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Oops! Something went wrong",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage,
+              style: const TextStyle(fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  // Reinitialize screens
+                  _initializeScreens();
+                });
+              },
+              child: const Text("Try Again"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _onItemTapped(int index) {
+    try {
     setState(() {
       _selectedIndex = index;
     });
+    } catch (e) {
+      print("❌ Navigation error: $e");
+      showErrorMessage("Navigation error: $e");
+    }
   }
 
   @override

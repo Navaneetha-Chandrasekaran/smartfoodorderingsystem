@@ -5,25 +5,46 @@ import 'constants.dart';
 import 'titles.dart';
 
 class Shop {
-  final String id;
+  final String? id;
   final String name;
-  final bool isOpen;
+  final bool? isOpen;
 
   Shop({
-    required this.id,
+    this.id,
     required this.name,
-    required this.isOpen,
+    this.isOpen,
   });
 
   factory Shop.fromJson(Map<String, dynamic> json) {
     try {
+      // Handle potential null or invalid values
+      String? shopId;
+      if (json['id'] != null) {
+        shopId = json['id'].toString();
+      }
+      
+      // Use a default name if missing
+      final shopName = json['name']?.toString() ?? 'Unnamed Shop';
+      
+      // Convert isOpen to boolean safely
+      bool? isShopOpen;
+      if (json['isOpen'] != null) {
+        isShopOpen = json['isOpen'] == true;
+      }
+      
       return Shop(
-        id: json['id'].toString(),
-        name: json['name'] ?? 'Unnamed Shop',
-        isOpen: json['isOpen'] == true,
+        id: shopId,
+        name: shopName,
+        isOpen: isShopOpen,
       );
     } catch (e) {
-      throw Exception('Error parsing shop: $e');
+      print('❌ Error parsing shop data: $e');
+      // Return a placeholder shop instead of throwing - more resilient
+      return Shop(
+        id: null,
+        name: 'Error: Invalid Shop Data',
+        isOpen: false,
+      );
     }
   }
 }
@@ -77,7 +98,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
                   icon: Image.asset('assets/shop.png', width: screenWidth * 0.1, height: screenWidth * 0.1),
                   shopName: SubTitles(title: shop.name),
                   status: Image.asset(
-                    shop.isOpen ? 'assets/open.png' : 'assets/close.png',
+                    shop.isOpen == true ? 'assets/open.png' : 'assets/close.png',
                     width: screenWidth * 0.1,
                     height: screenWidth * 0.1,
                   ),

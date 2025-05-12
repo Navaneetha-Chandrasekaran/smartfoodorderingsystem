@@ -58,7 +58,7 @@ class _CanteenLoginScreenState extends State<CanteenLoginScreen> {
 
     try {
       print("⏳ Sending login request...");
-      final response = await _authService.loginUser(email, password);
+      final response = await _authService.loginUser(email, password, 'canteen_staff');
       print("✅ API Response: $response");
 
       if (response['success']) {

@@ -4,11 +4,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 String getFullImageUrl(String? imagePath) {
   // If no image path is provided, return a proper network URL for placeholder
   if (imagePath == null || imagePath.isEmpty) {
+    print("🖼️ Using placeholder for empty image path");
     return 'https://via.placeholder.com/150';
   }
 
   // If the image path is already a full URL, return it as is
   if (imagePath.startsWith('http')) {
+    print("🖼️ Using direct image URL: $imagePath");
     return imagePath;
   }
 
@@ -24,5 +26,7 @@ String getFullImageUrl(String? imagePath) {
   String cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
   
   // Construct and return the full URL
-  return '$baseUrl/uploads/$cleanPath';
+  final fullUrl = '$baseUrl/uploads/$cleanPath';
+  print("🖼️ Constructed image URL: $fullUrl from path: $imagePath");
+  return fullUrl;
 }

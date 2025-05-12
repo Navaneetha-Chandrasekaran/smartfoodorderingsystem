@@ -4,11 +4,17 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/cart_item.dart';
 
 class CartService {
-  final String baseUrl = dotenv.env['API_BASE_URL']!;
+  // Get base URL from environment
+  String get baseUrl {
+    final apiUrl = dotenv.env['API_BASE_URL'];
+    print("🛒 Cart Service using API URL: $apiUrl");
+    return apiUrl ?? 'http://localhost:5000/api';
+  }
 
   // Fetch cart items
   Future<List<CartItem>> getCartItems(String userId) async {
     final Uri url = Uri.parse('$baseUrl/cart/view/$userId');
+    print("🛒 Fetching cart items from: $url");
 
     try {
       final response = await http.get(url);
@@ -27,6 +33,7 @@ class CartService {
   // Add item to cart
   Future<Map<String, dynamic>> addToCart(String userId, String shopId, String foodId) async {
     final Uri url = Uri.parse('$baseUrl/cart/add');
+    print("🛒 Adding to cart at: $url");
 
     // Ensure userId is a valid integer
     final int? parsedUserId = int.tryParse(userId);
@@ -81,6 +88,7 @@ class CartService {
   // Remove item from cart
   Future<Map<String, dynamic>> removeFromCart(String cartId) async {
     final Uri url = Uri.parse('$baseUrl/cart/remove/$cartId');
+    print("🛒 Removing from cart: $url");
 
     try {
       final response = await http.delete(url);
@@ -99,6 +107,7 @@ class CartService {
   // Clear the cart
   Future<Map<String, dynamic>> clearCart(String userId) async {
     final Uri url = Uri.parse('$baseUrl/cart/clear/$userId');
+    print("🛒 Clearing cart: $url");
 
     try {
       final response = await http.delete(url);

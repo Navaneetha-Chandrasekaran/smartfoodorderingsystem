@@ -704,6 +704,16 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
         onPressed: isCompleted ? null : () async {
           final orderId = order['order_id'].toString();
           final newStatus = statusInfo['next'];
+
+          // Convert frontend status format (lowercase_with_underscores) to 
+          // backend format (Title Case With Spaces)
+          final backendStatus = _convertToBackendStatusFormat(newStatus);
+          
+          // If moving to completed status, show OTP verification dialog
+          if (newStatus == 'completed') {
+            _showOtpVerificationDialog(order);
+            return;
+          }
           
           // Show a loading indicator while updating the status
           setState(() {
@@ -711,7 +721,8 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
             order['updating'] = true;
           });
           
-          final success = await _orderStatusService.updateOrderStatus(orderId, newStatus);
+          print("🔄 Updating order #$orderId status from $status to $newStatus (backend: $backendStatus)");
+          final success = await _orderStatusService.updateOrderStatus(orderId, backendStatus);
           
           if (success) {
             setState(() {
@@ -741,7 +752,7 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
             );
           }
         },
-    style: ElevatedButton.styleFrom(
+        style: ElevatedButton.styleFrom(
           backgroundColor: isCompleted ? Colors.grey.shade300 : statusInfo['color'],
           foregroundColor: isCompleted ? Colors.black87 : Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -785,9 +796,23 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
                 ),
               ],
             ),
-    ),
-  );
-}
+      ),
+    );
+  }
+
+  // Helper method to convert frontend status format to backend format
+  String _convertToBackendStatusFormat(String frontendStatus) {
+    // Map of frontend status (lowercase_with_underscores) to backend status (Title Case With Spaces)
+    final statusMap = {
+      'pending': 'Pending',
+      'confirmed': 'Confirmed',
+      'preparing': 'Preparing',
+      'ready_for_pickup': 'Ready for Pickup',
+      'completed': 'Delivered', // Backend uses "Delivered" instead of "Completed"
+    };
+    
+    return statusMap[frontendStatus] ?? frontendStatus;
+  }
 
   String _formatPickupTime(dynamic pickupTime) {
     if (pickupTime == null) return 'No pickup time';
@@ -872,5 +897,175 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
       print('Error formatting pickup time: $e');
       return 'Time available';
     }
+  }
+
+  // Complete the order after OTP verification
+  Future<void> _completeOrderAfterOtpVerification(Map<String, dynamic> order) async {
+    final orderId = order['order_id'].toString();
+    final enteredOtp = order['verified_otp'].toString();
+    
+    // Show a loading indicator while updating the status
+    setState(() {
+      // Add a temporary 'updating' field to the order
+      order['updating'] = true;
+    });
+    
+    // Convert to backend status format
+    final backendStatus = _convertToBackendStatusFormat('completed');
+    
+    print("🔄 Completing order #$orderId after OTP verification with OTP: $enteredOtp");
+    final success = await _orderStatusService.verifyOtpAndUpdateStatus(orderId, enteredOtp, backendStatus);
+    
+    if (success) {
+      setState(() {
+        // Remove the temporary 'updating' field
+        order.remove('updating');
+        order.remove('verified_otp');
+        
+        final idx = orders.indexWhere((o) => o['order_id'].toString() == orderId);
+        if (idx != -1) {
+          orders[idx]['status'] = 'completed';
+        }
+        
+        print("📋 Order #$orderId marked as completed after OTP verification");
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order completed successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      setState(() {
+        // Remove the temporary fields
+        order.remove('updating');
+        order.remove('verified_otp');
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error completing order'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Dialog to verify OTP before completing an order
+  void _showOtpVerificationDialog(Map<String, dynamic> order) {
+    final orderId = order['order_id'].toString();
+    final orderOtp = order['otp']?.toString() ?? '';
+    final TextEditingController otpController = TextEditingController();
+    String errorText = '';
+    
+    // Debug the order data to ensure OTP is available
+    print("🔍 Order data for OTP verification:");
+    print("   Order ID: $orderId");
+    print("   OTP available: ${orderOtp.isNotEmpty ? 'Yes' : 'No'}");
+    print("   OTP: ${orderOtp.isNotEmpty ? orderOtp : 'Missing!'}");
+    
+    // Show the dialog with OTP verification
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text(
+                'Verify OTP',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Please ask the customer for the OTP to complete this order.',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: otpController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      labelText: 'Enter OTP',
+                      hintText: 'Ask customer for 4-digit OTP',
+                      errorText: errorText.isNotEmpty ? errorText : null,
+                      prefixIcon: const Icon(Icons.pin, color: Colors.green),
+                    ),
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 8,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final enteredOtp = otpController.text.trim();
+                    
+                    // Verify OTP
+                    if (enteredOtp.isEmpty) {
+                      setState(() {
+                        errorText = 'Please enter OTP';
+                      });
+                      return;
+                    }
+                    
+                    if (orderOtp.isEmpty) {
+                      print("⚠️ Order OTP is empty, fetching details again...");
+                      // Could potentially fetch order details again here
+                      setState(() {
+                        errorText = 'Could not verify OTP. Please try again.';
+                      });
+                      return;
+                    }
+                    
+                    if (enteredOtp != orderOtp) {
+                      setState(() {
+                        errorText = 'Invalid OTP';
+                      });
+                      return;
+                    }
+                    
+                    // Store the verified OTP in the order
+                    order['verified_otp'] = enteredOtp;
+                    
+                    // OTP verified, close dialog
+                    Navigator.of(dialogContext).pop();
+                    
+                    // Now update order status
+                    await _completeOrderAfterOtpVerification(order);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Verify & Complete', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
   }
   }

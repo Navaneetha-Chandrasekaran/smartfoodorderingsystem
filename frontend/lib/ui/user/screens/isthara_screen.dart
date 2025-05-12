@@ -92,8 +92,13 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
 
   Future<void> _retryFetch({FoodCategory? category, String? type, required String shopId}) async {
     try {
+      int? parsedId = int.tryParse(shopId);
+      if (parsedId == null) {
+        throw Exception("Invalid shop ID format");
+      }
+      
       await Provider.of<FoodMenu>(context, listen: false)
-          .fetchMenuFromBackend(category: category, type: type, shopId: int.parse(shopId));
+          .fetchMenuFromBackend(category: category, type: type, shopId: parsedId);
     } catch (e) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ErrorDialog.show(

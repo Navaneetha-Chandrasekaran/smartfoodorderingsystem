@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   /// ✅ User Login
-  Future<Map<String, dynamic>> loginUser(String email, String password) async {
+  Future<Map<String, dynamic>> loginUser(String email, String password, String loginType) async {
     final String baseUrl = dotenv.env['API_BASE_URL']!;
     final String loginUrl = '$baseUrl/auth/login';
     final Uri url = Uri.parse(loginUrl);
@@ -14,7 +14,11 @@ class AuthService {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode({
+          'email': email, 
+          'password': password,
+          'loginType': loginType
+        }),
       );
 
       print("📥 API Response Status: ${response.statusCode}");
@@ -26,17 +30,26 @@ class AuthService {
 
         SharedPreferences prefs = await SharedPreferences.getInstance();
 
-        // Store user data locally with detailed logging
+        // Store JWT token
+        final token = data['token'];
+        if (token == null) {
+          print("⚠️ Warning: No token received from server");
+          return {
+            'success': false,
+            'message': 'Login failed: No authentication token received'
+          };
+        }
+        
+        await prefs.setString('token', token);
+        print("🔑 Storing JWT token: $token");
+
+        // Store user data
         final userId = data['userId']?.toString();
         print("🔑 Storing user ID: $userId");
         if (userId != null && userId.isNotEmpty) {
           await prefs.setString('userId', userId);
         } else {
           print("⚠️ Warning: No user ID received from server");
-          return {
-            'success': false,
-            'message': 'Login failed: No user ID received'
-          };
         }
         
         final email = data['email']?.toString();
@@ -46,10 +59,14 @@ class AuthService {
         final name = data['name']?.toString();
         print("👤 Storing name: $name");
         await prefs.setString('name', name ?? '');
+        
+        final role = data['role']?.toString();
+        print("👑 Storing role: $role");
+        await prefs.setString('role', role ?? '');
 
         // Verify the stored data
-        final storedUserId = prefs.getString('userId');
-        print("✅ Verified stored user ID: $storedUserId");
+        final storedToken = prefs.getString('token');
+        print("✅ Verified stored token: ${storedToken != null ? 'Token exists' : 'Token missing'}");
 
         return {
           'success': true,
@@ -73,6 +90,18 @@ class AuthService {
   }
 
   // ✅ Global Static Getters
+  static Future<String?> getAuthToken() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  static Future<Map<String, String>> getAuthHeaders() async {
+    final token = await getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token != null ? 'Bearer $token' : '',
+    };
+  }
 
   static Future<int?> getCurrentUserId() async {
     try {
@@ -118,6 +147,45 @@ class AuthService {
   Future<void> logoutUser() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    print("👋 User logged out. Local data cleared.");
+    print("👋 User logged out. Local data and token cleared.");
+  }
+
+  // Check if token is valid by making a test request
+  static Future<bool> validateToken() async {
+    try {
+      final token = await getAuthToken();
+      if (token == null || token.isEmpty) {
+        print("⚠️ No token found");
+        return false;
+      }
+      
+      final String baseUrl = dotenv.env['API_BASE_URL']!;
+      final String validateUrl = '$baseUrl/auth/validate-token';
+      final Uri url = Uri.parse(validateUrl);
+      
+      final response = await http.get(
+        url,
+        headers: await getAuthHeaders(),
+      ).timeout(const Duration(seconds: 5));
+      
+      return response.statusCode == 200;
+    } catch (e) {
+      print("❌ Token validation error: $e");
+      return false;
+    }
+  }
+
+  // Helper method to convert frontend status format to backend format
+  String _convertToBackendStatusFormat(String frontendStatus) {
+    // Map of frontend status (lowercase_with_underscores) to backend status (Title Case With Spaces)
+    final statusMap = {
+      'pending': 'Pending',
+      'confirmed': 'Confirmed',
+      'preparing': 'Preparing',
+      'ready_for_pickup': 'Ready for Pickup',
+      'completed': 'Delivered', // Backend uses "Delivered" instead of "Completed"
+    };
+    
+    return statusMap[frontendStatus] ?? frontendStatus;
   }
 }

@@ -20,6 +20,7 @@ import '../sheets/shared_prefs.dart';
 import 'timeline_screen.dart';
 import '../../../models/cart_item.dart';
 import 'package:lottie/lottie.dart';
+import '../../../services/auth_service.dart' as auth;
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -116,51 +117,119 @@ class _CartScreenState extends State<CartScreen> with SingleTickerProviderStateM
     });
 
     try {
-      // Store cart items before placing order
+      // Store cart items before placing order - DEEP COPY to preserve all item details
       final List<CartItem> orderedItems = List.from(foodMenu.cart);
-      print("📦 Stored ${orderedItems.length} items for order");
+      
+      // Add debug output for ordered items before API call
+      print("📦 Captured ${orderedItems.length} items from cart before placing order");
+      for (var item in orderedItems) {
+        print("   📝 Item: ${item.food.name}, price=${item.food.price}, quantity=${item.quantity}");
+      }
 
       final orderService = OrderService();
+      
+      // Convert TimeOfDay to DateTime
+      final now = DateTime.now();
+      final pickupDateTime = DateTime(
+        now.year, 
+        now.month, 
+        now.day,
+        _selectedTime!.hour, 
+        _selectedTime!.minute
+      );
+      
+      final List<Map<String, dynamic>> foodItemsForApi = orderedItems.map((item) => {
+        'food_id': item.food.id,
+        'quantity': item.quantity,
+        // Include full item details for local storage
+        'name': item.food.name,
+        'price': item.food.price,
+        'description': item.food.description,
+        'image': item.food.image,
+        'isVeg': item.food.isVeg,
+        'category': item.food.category.name,
+        'total_price': item.food.price * item.quantity,
+      }).toList();
+      
       final result = await orderService.placeOrder(
-        userId: userId.toString(),
-        shopId: shopId,
-        pickupTime: _selectedTime!.format(context),
-        paymentMethod: _selectedPayment,
-        totalAmount: foodMenu.getTotalPrice(),
-        cartItems: orderedItems,
-        context: context,
+        await auth.AuthService.getCurrentUserId() ?? "",
+        shopId,
+        pickupDateTime,
+        _selectedPayment,
+        foodMenu.getTotalPrice(),
+        foodItemsForApi,
       );
 
       print("📦 Order placement result: $result");
 
       if (!mounted) return;
 
-      if (result.containsKey('error')) {
-        print("❌ Error placing order: ${result['error']}");
+      if (result['success'] == false) {
+        print("❌ Error placing order: ${result['message']}");
         setState(() => _isOrderProcessing = false);
+        
+        // Handle authentication error specifically
+        if (result['message'].toString().contains('Authentication failed')) {
+          // Show auth error and prompt to login again
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(result['message'])),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Login',
+                textColor: Colors.white,
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+              ),
+            ),
+          );
+          return;
+        }
+        
+        // Handle other errors
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['error'])),
+          SnackBar(content: Text(result['message'])),
         );
         return;
       }
 
+      // Create a well-formed order data object with complete food details
       final orderData = {
           'order_id': result['order_id'].toString(),
           'otp': result['otp'].toString(),
           'items': orderedItems.map((item) => {
-          'id': item.food.id,
+            'id': item.food.id,
+            'food_id': item.food.id,
             'name': item.food.name,
             'quantity': item.quantity,
             'price': item.food.price,
+            'total_price': item.food.price * item.quantity,
+            'total_item_price': item.food.price * item.quantity,
             'description': item.food.description,
-          'image': item.food.image,
-          'isVeg': item.food.isVeg,
-          'total_item_price': item.food.price * item.quantity,
+            'image': item.food.image,
+            'isVeg': item.food.isVeg,
+            'category': item.food.category.name,
           }).toList(),
-          'payment_mode': _selectedPayment,
+          'payment_method': _selectedPayment,
           'pickup_time': _selectedTime!.format(context),
           'total_amount': foodMenu.getTotalPrice(),
+          'status': 'pending',
+          'shop_id': shopId,
       };
+
+      // Debug the items data before saving
+      print("📦 Order data created with ${(orderData['items'] as List).length} items");
+      for (var item in orderData['items'] as List) {
+        print("📦 Order item: name=${item['name']}, price=${item['price']}, quantity=${item['quantity']}, total=${item['total_price']}");
+      }
 
       try {
         // Store the order data and clear cart
@@ -204,11 +273,85 @@ class _CartScreenState extends State<CartScreen> with SingleTickerProviderStateM
     if (!_canNavigate && mounted && context.mounted) {
       setState(() => _canNavigate = true);
       print("🔄 Animation completed, navigating to timeline screen...");
+      
+      // Get the latest order data from FoodMenu provider
+      final foodMenu = Provider.of<FoodMenu>(context, listen: false);
+      final orderData = foodMenu.latestOrderData;
+      
+      if (orderData == null) {
+        print("❌ Error: No order data available for timeline");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error retrieving order data")),
+        );
+        Navigator.pushReplacementNamed(context, '/menu');
+        return;
+      }
+      
+      // Verify that items exist in the order data
+      final items = orderData['items'] as List<dynamic>?;
+      if (items == null || items.isEmpty) {
+        print("⚠️ Warning: Order data has no items! Order ID: ${orderData['order_id']}");
+      } else {
+        print("✅ Navigating to timeline with order #${orderData['order_id']} containing ${items.length} items");
+        // Debug item contents before navigation
+        for (var item in items) {
+          print("   📝 Item: ${item['name']}, price=${item['price']}, quantity=${item['quantity']}, total=${item['total_price'] ?? item['total_item_price'] ?? 'N/A'}");
+        }
+      }
+      
+      // Create a proper deep copy of the order data with all required fields - VERY IMPORTANT
+      final deepCopyOrderData = {
+        'order_id': orderData['order_id']?.toString() ?? '',
+        'otp': orderData['otp']?.toString() ?? '',
+        'payment_method': orderData['payment_method']?.toString() ?? '',
+        'pickup_time': orderData['pickup_time']?.toString() ?? '',
+        'total_amount': orderData['total_amount'] is num ? orderData['total_amount'] : 0.0,
+        'status': orderData['status']?.toString() ?? 'pending',
+        'shop_id': orderData['shop_id']?.toString() ?? '',
+        'shop_name': foodMenu.getShopNameById(orderData['shop_id']?.toString() ?? '') ?? 'Unknown Shop',
+        'items': items != null ? items.map((item) => {
+          'id': item['id']?.toString() ?? '',
+          'food_id': item['food_id']?.toString() ?? item['id']?.toString() ?? '',
+          'name': item['name']?.toString() ?? 'Unknown Item',
+          'quantity': item['quantity'] is int ? item['quantity'] : 
+                     (item['quantity'] is String ? int.tryParse(item['quantity']) ?? 1 : 1),
+          'price': item['price'] is num ? item['price'] : 
+                  (item['price'] is String ? double.tryParse(item['price']) ?? 0.0 : 0.0),
+          'total_price': item['total_price'] is num ? item['total_price'] :
+                        (item['total_item_price'] is num ? item['total_item_price'] : 
+                        (item['price'] is num && item['quantity'] is num ? 
+                          (item['price'] as num) * (item['quantity'] as num) : 0.0)),
+          'total_item_price': item['total_item_price'] is num ? item['total_item_price'] :
+                             (item['total_price'] is num ? item['total_price'] : 
+                             (item['price'] is num && item['quantity'] is num ? 
+                              (item['price'] as num) * (item['quantity'] as num) : 0.0)),
+          'description': item['description']?.toString() ?? '',
+          'image': item['image']?.toString() ?? '',
+          'isVeg': item['isVeg'] is bool ? item['isVeg'] : true,
+          'category': item['category']?.toString() ?? '',
+        }).toList() : [],
+      };
+      
+      // One more verification to ensure our deep copy worked correctly
+      final copiedItems = deepCopyOrderData['items'] as List<dynamic>;
+      if (copiedItems.isNotEmpty) {
+        print("✅ Deep copy successful with ${copiedItems.length} items");
+        for (var item in copiedItems) {
+          print("   📝 Copied Item: ${item['name']}, price=${item['price']}, quantity=${item['quantity']}, total=${item['total_price']}");
+        }
+      } else {
+        print("⚠️ Warning: Deep copy produced empty items list");
+      }
+      
+      // Add a small delay to give the backend time to register the order
+      // This is important to ensure the order is saved on the backend before we try to fetch it
+      Future.delayed(const Duration(milliseconds: 2500), () {
       Navigator.pushReplacementNamed(
         context,
         '/timeline',
-        arguments: Provider.of<FoodMenu>(context, listen: false).latestOrderData,
+          arguments: deepCopyOrderData,
       );
+      });
     }
   }
 
