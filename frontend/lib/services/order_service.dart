@@ -137,12 +137,15 @@ class OrderService {
               : Uri.http(host, '/api/orders/getorder/$shopId'));
 
       print("📤 Fetching orders from: $uri");
-      final response = await http.get(uri);
+      
+      // Get auth headers
+      final headers = await auth.AuthService.getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       print("📥 Received response: ${response.statusCode} - ${response.body}");
 
       if (response.statusCode == 200) {
-          final List<dynamic> data = jsonDecode(response.body);
+        final List<dynamic> data = jsonDecode(response.body);
         print("✅ Fetched ${data.length} orders from backend");
         
         // Organize by order_id to group items
@@ -157,28 +160,56 @@ class OrderService {
               'user_id': item['user_id'],
               'pickup_time': item['pickup_time'],
               'payment_method': item['payment_method'],
-              'total_amount': item['total_amount'],
+              'total_amount': item['total_amount'] is num ? item['total_amount'] : 
+                            (item['total_amount'] is String ? 
+                             double.tryParse(item['total_amount']) ?? 0.0 : 0.0),
               'otp': item['otp'],
-              'status': item['status']?.toLowerCase() ?? 'pending',
+              'status': item['status']?.toString().toLowerCase().replaceAll(' ', '_') ?? 'pending',
               'items': [],
             };
           }
           
+          // Add item with all fields from the backend
           ordersMap[orderId]['items'].add({
-            'id': item['food_id'],
-            'name': item['name'],
-            'quantity': item['quantity'],
-            'price': item['price'] != null ? double.tryParse(item['price'].toString()) ?? 0.0 : 0.0,
-            'image': item['image'] ?? '',
-            'description': item['description'] ?? '',
-            'type': item['type'] ?? 'veg',
+            'id': item['food_id']?.toString() ?? '',
+            'food_id': item['food_id']?.toString() ?? '',
+            'name': item['name']?.toString() ?? 'Unknown Item',
+            'quantity': item['quantity'] is num ? item['quantity'] : 
+                      (item['quantity'] is String ? int.tryParse(item['quantity']) ?? 1 : 1),
+            'price': item['price'] is num ? item['price'] : 
+                    (item['price'] is String ? double.tryParse(item['price']) ?? 0.0 : 0.0),
+            'description': item['description']?.toString() ?? '',
+            'image': item['image']?.toString() ?? '',
+            'isVeg': item['type']?.toString().toLowerCase() == 'veg',
+            'type': item['type']?.toString() ?? 'veg',
+            'category': item['category']?.toString() ?? '',
           });
         }
         
-        List<Map<String, dynamic>> orders = ordersMap.values.cast<Map<String, dynamic>>().toList();
+        // Convert to list and calculate totals
+        List<Map<String, dynamic>> orders = ordersMap.values.map((order) {
+          // Calculate total if not present
+          if (order['total_amount'] == 0.0) {
+            double total = 0.0;
+            for (var item in order['items'] as List) {
+              final price = item['price'] as double;
+              final quantity = item['quantity'] as int;
+              total += price * quantity;
+            }
+            order['total_amount'] = total;
+          }
+          return order as Map<String, dynamic>;
+        }).toList();
         
+        // Debug log
         for (var order in orders) {
-          print("📊 Processing order #${order['order_id']} with status: ${order['status']}");
+          print("📊 Processing order #${order['order_id']}:");
+          print("   📅 Status: ${order['status']}");
+          print("   💰 Total: ${order['total_amount']}");
+          print("   📦 Items: ${order['items'].length}");
+          for (var item in order['items']) {
+            print("      - ${item['name']} (${item['quantity']}x) @ ₹${item['price']}");
+          }
         }
         
         return orders;

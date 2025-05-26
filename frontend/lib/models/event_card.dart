@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'constants.dart';
 
@@ -26,6 +27,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
+  bool _isAnimating = false;
 
   @override
   void initState() {
@@ -33,7 +35,7 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500), // ✅ Smooth transition
+      duration: const Duration(milliseconds: 500),
     );
 
     _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
@@ -44,11 +46,28 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
       CurvedAnimation(parent: _controller, curve: Curves.easeIn),
     );
 
-    // ✅ Start animation when event is past
+    // Schedule animation for next frame if needed
     if (widget.isPast) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) _controller.forward();
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isAnimating) {
+          _playAnimation();
+        }
       });
+    }
+  }
+
+  Future<void> _playAnimation() async {
+    if (_isAnimating || !mounted) return;
+    
+    try {
+      _isAnimating = true;
+      await _controller.forward();
+    } catch (e) {
+      print("Animation error: $e");
+    } finally {
+      if (mounted) {
+        _isAnimating = false;
+      }
     }
   }
 
@@ -56,7 +75,11 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
   void didUpdateWidget(covariant EventCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isPast && !oldWidget.isPast) {
-      _controller.forward();
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isAnimating) {
+          _playAnimation();
+        }
+      });
     }
   }
 
@@ -123,3 +146,4 @@ class _EventCardState extends State<EventCard> with SingleTickerProviderStateMix
     );
   }
 }
+

@@ -30,31 +30,60 @@ class Timeline extends StatelessWidget {
     double screenWidth = MediaQuery.of(context).size.width;
 
     return SizedBox(
-      height: screenWidth * 0.45,
+      height: screenWidth * 0.25,
       child: TimelineTile(
         isFirst: isFirst,
         isLast: isLast,
+        
+        alignment: TimelineAlign.manual,
+        lineXY: 0.1,
 
         beforeLineStyle: LineStyle(
-          color: isPast ? secondaryColor : Colors.grey,
-          thickness: isPast ? 4 : 2,
+          color: isPast ? const Color(0xFF4AE578) : Colors.grey.shade200,
+          thickness: 2,
         ),
 
         indicatorStyle: IndicatorStyle(
-          width: screenWidth * 0.08,
-          color: isPast ? secondaryColor : Colors.grey,
-          iconStyle: IconStyle(
-            iconData: isPast ? Icons.check : Icons.circle,
-            color: Colors.white,
+          width: screenWidth * 0.05,
+          height: screenWidth * 0.05,
+          indicator: Container(
+            decoration: BoxDecoration(
+              color: isPast ? const Color(0xFF4AE578) : Colors.grey.shade300,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isPast ? Colors.white : Colors.grey.shade200,
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isPast ? const Color(0xFF4AE578).withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: isPast 
+              ? Icon(
+                  Icons.check,
+                  color: Colors.white,
+                  size: screenWidth * 0.03,
+                )
+              : null,
           ),
+          padding: EdgeInsets.zero,
         ),
 
-        endChild: TimelineAnimation(
-          isPast: isPast,
-          child: eventCard,
-          orderNumber: orderNumber,
-          animatedOrders: animatedOrders,
-          isRefreshing: isRefreshing,
+        endChild: Padding(
+          padding: EdgeInsets.only(left: screenWidth * 0.02),
+          child: TimelineAnimation(
+            key: ValueKey('timeline_${orderNumber}_${isPast}_${isRefreshing}'),
+            isPast: isPast,
+            child: eventCard,
+            orderNumber: orderNumber,
+            animatedOrders: animatedOrders,
+            isRefreshing: isRefreshing,
+          ),
         ),
       ),
     );

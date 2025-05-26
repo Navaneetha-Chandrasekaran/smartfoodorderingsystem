@@ -69,16 +69,25 @@ class AuthService {
         print("✅ Verified stored token: ${storedToken != null ? 'Token exists' : 'Token missing'}");
 
         return {
-          'success': true,
-          'message': data['message'],
+          'success': true, // Explicitly set success flag
+          'message': data['message'] ?? 'Login successful',
           'role': data['role'],
         };
       } else {
-        final error = json.decode(response.body);
-        return {
-          'success': false,
-          'message': error['message'] ?? 'Login failed',
-        };
+        try {
+          final error = json.decode(response.body);
+          print("⚠️ Login error response: $error");
+          return {
+            'success': false,
+            'message': error['message'] ?? 'Login failed with status ${response.statusCode}',
+          };
+        } catch (e) {
+          print("⚠️ Error parsing login error response: $e");
+          return {
+            'success': false,
+            'message': 'Login failed with status ${response.statusCode}',
+          };
+        }
       }
     } catch (e) {
       print("❌ API Request Error: $e");
