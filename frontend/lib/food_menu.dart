@@ -46,13 +46,18 @@ class Order {
 }
 
 class FoodMenu extends ChangeNotifier {
-  List<Food> _rawMenu = [];
   List<Food> _menu = [];
-  String? _currentTypeFilter;
-  
-  final List<CartItem> _cart = [];
-  final List<Order> _orders = [];
+  List<CartItem> _cart = [];
+  Map<String, List<Food>> _shopMenus = {}; // Store menus by shop ID
+  String? _currentShopId;
   Map<String, dynamic>? _latestOrderData;
+
+  List<Food> get menu => _menu;
+  List<CartItem> get cart => _cart;
+  String? get currentShopId => _currentShopId;
+  Map<String, dynamic>? get latestOrderData => _latestOrderData;
+
+  final List<Order> _orders = [];
   List<CartItem> _lastOrderedItems = [];
   List<Order> _upcomingOrders = [];
   final List<Order> _completedOrders = [];
@@ -67,14 +72,11 @@ class FoodMenu extends ChangeNotifier {
     _loadLatestOrderData();
   }
 
-  List<Food> get menu => _menu;
-  List<CartItem> get cart => _cart;
   List<CartItem> get lastOrderedItems => _lastOrderedItems;
   List<Order> get upcomingOrders => _upcomingOrders;
   List<Order> get completedOrders => _completedOrders;
   bool get isOrderCancelled => _isOrderCancelled;
   int get nextOrderNumber => _nextOrderNumber;
-  Map<String, dynamic>? get latestOrderData => _latestOrderData;
 
   Future<void> _loadLatestOrderData() async {
     try {
@@ -209,20 +211,98 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addToCart(Food food) {
-    if (food.availableQuantity > 0) {
-      CartItem? cartItem = _cart.firstWhereOrNull(
-        (item) => item.food == food,
-      );
+  Future<void> fetchMenuFromBackend({
+    required FoodCategory category,
+    String? type,
+    required int shopId,
+  }) async {
+    try {
+      print('🔄 Fetching menu for shop #$shopId, category: ${category.name}, type: $type');
+      
+      final baseUrl = dotenv.env['API_BASE_URL'];
+      if (baseUrl == null) throw Exception('API_BASE_URL not found in environment variables');
 
-      if (cartItem != null) {
-        cartItem.quantity++;
+      final queryParams = {
+        'category': category.name.toLowerCase(),
+        if (type != null) 'type': type,
+        'shop_id': shopId.toString(),
+      };
+
+      final uri = Uri.parse('$baseUrl/food/getfoods').replace(queryParameters: queryParams);
+      
+      final response = await http.get(uri);
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        final List<Food> fetchedMenu = data.map((item) => Food.fromJson(item)).toList();
+        
+        // Store the menu for this shop
+        _shopMenus[shopId.toString()] = fetchedMenu;
+        _currentShopId = shopId.toString();
+        _menu = fetchedMenu;
+        
+        print('✅ Fetched ${fetchedMenu.length} items for shop #$shopId');
+        notifyListeners();
       } else {
-        _cart.add(CartItem(food: food, cartId: '', otp: '', paymentMode: ''));
+        print('❌ Failed to fetch menu: ${response.statusCode}');
+        throw Exception('Failed to fetch menu');
       }
+    } catch (e) {
+      print('❌ Error fetching menu: $e');
+      throw Exception('Error fetching menu: $e');
+    }
+  }
 
+  void addToCart(Food food) {
+    if (_currentShopId == null) {
+      print('⚠️ Cannot add to cart: No shop selected');
+      return;
+    }
+
+    final existingIndex = _cart.indexWhere((item) => item.food.id == food.id);
+    
+    if (existingIndex != -1) {
+      _cart[existingIndex] = CartItem(
+        food: food,
+        quantity: _cart[existingIndex].quantity + 1,
+        shopId: _currentShopId!,
+      );
+    } else {
+      _cart.add(CartItem(
+        food: food,
+        quantity: 1,
+        shopId: _currentShopId!,
+      ));
+    }
+    
+    print('🛒 Added ${food.name} to cart for shop #$_currentShopId');
+    notifyListeners();
+  }
+
+  void removeFromCart(Food food) {
+    final existingIndex = _cart.indexWhere((item) => item.food.id == food.id);
+
+    if (existingIndex != -1) {
+      if (_cart[existingIndex].quantity > 1) {
+        _cart[existingIndex] = CartItem(
+          food: food,
+          quantity: _cart[existingIndex].quantity - 1,
+          shopId: _cart[existingIndex].shopId,
+        );
+      } else {
+        _cart.removeAt(existingIndex);
+      }
       notifyListeners();
     }
+  }
+
+  void clearCart() {
+    _cart.clear();
+    notifyListeners();
+  }
+
+  double getTotalPrice() {
+    return _cart.fold(0, (total, item) => total + (item.food.price * item.quantity));
   }
 
   void placeOrder(TimeOfDay? selectedTime, String? otp, String selectedPayment, String shopId) {
@@ -239,30 +319,6 @@ class FoodMenu extends ChangeNotifier {
       _cart.clear();
       notifyListeners();
     }
-  }
-
-  void removeFromCart(CartItem cartItem) {
-    if (_cart.contains(cartItem)) {
-      cartItem.food.availableQuantity++;
-      if (cartItem.quantity > 1) {
-        cartItem.quantity--;
-      } else {
-        _cart.remove(cartItem);
-      }
-      notifyListeners();
-    }
-  }
-
-  int getTotalItemCount() => _cart.fold(0, (sum, item) => sum + item.quantity);
-
-  double getTotalPrice() => _cart.fold(0, (sum, item) => sum + (item.food.price * item.quantity));
-
-  void clearCart() {
-    for (var item in _cart) {
-      item.food.availableQuantity += item.quantity;
-    }
-    _cart.clear();
-    notifyListeners();
   }
 
   void cancelOrder(int orderNumber) {
@@ -341,57 +397,9 @@ class FoodMenu extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Fetch food menu from backend
-  Future<void> fetchMenuFromBackend({FoodCategory? category, String? type, required int shopId}) async {
-
-    
-    try {
-      final categoryStr = category?.name.toLowerCase() ?? 'lunch';
-      final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
-      final path = '/api/food/getfoods';
-
-      final queryParams = {
-        'shop_id': shopId.toString(),
-        'category': categoryStr,
-        if (type != null) 'type': type.replaceAll(' ', '_').toLowerCase(),
-      }; 
-
-      final uri = isSecure
-          ? Uri.https(host, path, queryParams)
-          : Uri.http(host, path, queryParams);
-
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        _rawMenu = data.map((item) => Food.fromJson(item)).toList();
-        _currentTypeFilter = type;
-        _applyFilter();
-      } else {
-        debugPrint('❌ Failed to load menu: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('🚨 Error fetching food menu: $e');
-    }
-  }
-
-  void _applyFilter() {
-    debugPrint('🔍 Applying filter: $_currentTypeFilter with ${_rawMenu.length} items');
-    if (_currentTypeFilter == 'veg') {
-      _menu = _rawMenu.where((f) => f.isVeg).toList();
-    } else if (_currentTypeFilter == 'non veg') {
-      _menu = _rawMenu.where((f) => !f.isVeg).toList();
-    } else {
-      _menu = List.from(_rawMenu);
-    }
-    debugPrint('📋 Filtered menu length: ${_menu.length}');
-    notifyListeners();
-  }
-
   void updateFilter(String? type) {
-    _currentTypeFilter = type?.toLowerCase().replaceAll('_', ' ');
-    _applyFilter();
+    // Implementation needed for filter updates
+    notifyListeners();
   }
 
   // Check if an order with given order ID is cancelled
@@ -504,35 +512,79 @@ class FoodMenu extends ChangeNotifier {
   
   // Get shop name by shop ID
   String? getShopNameById(String shopId) {
-    if (shopId.isEmpty) return null;
-    
-    // Map of known shop IDs to shop names - update this based on your available shops
-    final Map<String, String> shopNames = {
-      '1': 'Campus Cafe',
-      '2': 'Byte Food Court',
-      '3': 'Code Canteen',
-      '4': 'Developer\'s Deli',
-      '5': 'Engineering Eats',
-      // Add more shops as needed
-    };
-    
-    // Try to get from the map
-    final name = shopNames[shopId];
-    
-    // If found, return it
-    if (name != null) {
-      return name;
-    }
-    
-    // If not found in the map, check if it's in latest order data
+    try {
+      // First check if we have the shop name in the latest order data
     if (_latestOrderData != null && 
         _latestOrderData!['shop_id']?.toString() == shopId && 
         _latestOrderData!['shop_name'] != null) {
       return _latestOrderData!['shop_name'].toString();
     }
     
-    // Last resort: return a formatted version of the ID
-    return 'Shop #$shopId';
+      // Then check if we have it in the shop menus
+      if (_shopMenus.containsKey(shopId) && _shopMenus[shopId]!.isNotEmpty) {
+        // Get shop name from the first item in the menu that has a shop name
+        final foodWithShopName = _shopMenus[shopId]!.firstWhere(
+          (food) => food.shopName != null && food.shopName!.isNotEmpty,
+          orElse: () => _shopMenus[shopId]!.first
+        );
+        if (foodWithShopName.shopName != null && foodWithShopName.shopName!.isNotEmpty) {
+          return foodWithShopName.shopName;
+        }
+      }
+
+      // Finally check completed orders in SharedPreferences
+      SharedPreferences.getInstance().then((prefs) {
+        final completedOrdersString = prefs.getString('completed_orders');
+        if (completedOrdersString != null) {
+          final completedOrders = json.decode(completedOrdersString) as List;
+          final matchingOrder = completedOrders.firstWhere(
+            (order) => order['shop_id']?.toString() == shopId && 
+                      order['shop_name'] != null && 
+                      order['shop_name'].toString().isNotEmpty,
+            orElse: () => null
+          );
+          if (matchingOrder != null) {
+            return matchingOrder['shop_name'].toString();
+          }
+        }
+      });
+
+      // If no shop name found, try to fetch it from the backend
+      _fetchShopName(shopId);
+      
+      return null;
+    } catch (e) {
+      print('❌ Error getting shop name for shop #$shopId: $e');
+      return null;
+    }
+  }
+
+  // Fetch shop name from backend
+  Future<void> _fetchShopName(String shopId) async {
+    try {
+      final baseUrl = dotenv.env['API_BASE_URL'];
+      if (baseUrl == null) throw Exception('API_BASE_URL not found in environment variables');
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/shops/$shopId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['name'] != null) {
+          // Update shop name in menus if we have any items from this shop
+          if (_shopMenus.containsKey(shopId)) {
+            _shopMenus[shopId] = _shopMenus[shopId]!.map((food) => 
+              food.copyWith(shopName: data['name'].toString())
+            ).toList();
+          }
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      print('❌ Error fetching shop name from backend: $e');
+    }
   }
   
   // Clear all orders data on logout

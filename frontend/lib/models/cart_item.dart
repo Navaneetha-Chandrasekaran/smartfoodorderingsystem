@@ -2,18 +2,20 @@ import '../food.dart';
 
 
 class CartItem {
-  String cartId;
-  Food food;
+  final Food food;
   int quantity;
-  String paymentMode;
-  String otp;
+  final String shopId;
+  String? cartId;
+  String? otp;
+  String? paymentMode;
 
   CartItem({
-    required this.cartId,
     required this.food,
     this.quantity = 1,
-    required this.paymentMode,
-    required this.otp,
+    required this.shopId,
+    this.cartId,
+    this.otp,
+    this.paymentMode,
   });
 
   double get totalPrice {
@@ -23,22 +25,24 @@ class CartItem {
   // From JSON
   factory CartItem.fromJson(Map<String, dynamic> json) {
     return CartItem(
-      cartId: json['cart_id'] ?? '',
       food: Food.fromJson(json['food'] ?? {}),
       quantity: json['quantity'] ?? 1,
-      paymentMode: json['payment_mode'] ?? '',
-      otp: json['otp'] ?? '',
+      shopId: json['shop_id'] ?? '',
+      cartId: json['cart_id'],
+      otp: json['otp'],
+      paymentMode: json['payment_mode'],
     );
   }
 
   // To JSON
   Map<String, dynamic> toJson() {
     return {
-      'cart_id': cartId,
       'food': food.toJson(),
       'quantity': quantity,
-      'payment_mode': paymentMode,
+      'shop_id': shopId,
+      'cart_id': cartId,
       'otp': otp,
+      'payment_mode': paymentMode,
     };
   }
 }

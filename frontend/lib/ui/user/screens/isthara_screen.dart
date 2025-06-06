@@ -9,6 +9,8 @@ import '../../../models/food_tile.dart';
 import '../../../models/sliver_appbar.dart';
 import '../../../models/tab_bar.dart';
 import '../../../models/titles.dart';
+import '../../../services/shop_service.dart';
+import '../../../models/shop.dart';
 import 'food_screen.dart';
 
 enum FoodTypeFilter { all, veg, nonVeg }
@@ -27,6 +29,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
   FoodTypeFilter _filter = FoodTypeFilter.all;
   bool _isLoading = false;
   bool _isAnimating = false;
+  String _shopName = '';
 
   @override
   void initState() {
@@ -58,25 +61,49 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
         });
       }
     });
-    // Initial load
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _retryFetch(
+    
+    // Load shop name and initial menu
+    _loadShopDetails();
+  }
+
+  Future<void> _loadShopDetails() async {
+    try {
+      final shopService = ShopService();
+      final shops = await shopService.fetchShops();
+      final shop = shops.firstWhere(
+        (shop) => shop.id == widget.shopId,
+        orElse: () => Shop(name: 'Shop'),
+      );
+
+      if (mounted) {
+        setState(() {
+          _shopName = shop.name;
+        });
+      }
+
+      // Initial menu load
+      await _retryFetch(
         category: FoodCategory.values[_tabController.index],
         type: _currentFilterType,
         shopId: widget.shopId,
-      ).then((_) {
+      );
+
         if (mounted) {
           setState(() {
             _isLoading = false;
             _isAnimating = false;
           });
         }
-      });
-    });
-  }
-
-  void _handleTabChange() {
-    // Removed since we're handling it in the listener
+    } catch (e) {
+      print('❌ Error loading shop details: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isAnimating = false;
+          _shopName = 'Shop';
+        });
+      }
+    }
   }
 
   String? get _currentFilterType {
@@ -84,13 +111,17 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
       case FoodTypeFilter.veg:
         return 'veg';
       case FoodTypeFilter.nonVeg:
-        return 'non_veg';
+        return 'nonveg';
       default:
         return null;
     }
   }
 
-  Future<void> _retryFetch({FoodCategory? category, String? type, required String shopId}) async {
+  Future<void> _retryFetch({
+    required FoodCategory category,
+    String? type,
+    required String shopId,
+  }) async {
     try {
       int? parsedId = int.tryParse(shopId);
       if (parsedId == null) {
@@ -100,14 +131,14 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
       await Provider.of<FoodMenu>(context, listen: false)
           .fetchMenuFromBackend(category: category, type: type, shopId: parsedId);
     } catch (e) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
         ErrorDialog.show(
           context,
           title: "Menu Load Failed",
           message: e.toString(),
           onRetry: () => _retryFetch(category: category, type: type, shopId: shopId),
         );
-      });
+      }
     }
   }
 
@@ -149,7 +180,6 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
 
   @override
   void dispose() {
-    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     super.dispose();
   }
@@ -169,7 +199,7 @@ class _IstharaScreenState extends State<IstharaScreen> with SingleTickerProvider
                 key: ValueKey<FoodTypeFilter>(_filter),
                 headerSliverBuilder: (_, __) => [
                   MySliverAppBar(
-                    title: const SubTitles(title: 'Isthara'),
+                    title: SubTitles(title: _shopName),
                     child: const Text(''),
                     bottom: PreferredSize(
                       preferredSize: const Size.fromHeight(40),

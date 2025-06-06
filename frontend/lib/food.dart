@@ -16,6 +16,7 @@ class Food {
   final FoodCategory category;
   int availableQuantity;
   final bool isVeg;
+  final String? shopName;
 
   Food({
     required this.id,
@@ -26,6 +27,7 @@ class Food {
     required this.category,
     required this.availableQuantity,
     required this.isVeg,
+    this.shopName,
   });
 
   static FoodCategory _parseCategory(String? value) {
@@ -57,6 +59,7 @@ class Food {
       category: Food._parseCategory(json['category']),
       availableQuantity: int.tryParse(json['availability']?.toString() ?? '0') ?? 0,
       isVeg: Food._parseIsVeg(json['type']),
+      shopName: json['shop_name']?.toString(),
     );
   }
 
@@ -69,6 +72,7 @@ class Food {
         'category': category.name,
         'availableQuantity': availableQuantity,
         'isVeg': isVeg,
+        'shopName': shopName,
       };
 
   Food copyWith({
@@ -80,6 +84,7 @@ class Food {
     FoodCategory? category,
     int? availableQuantity,
     bool? isVeg,
+    String? shopName,
   }) {
     return Food(
       id: id ?? this.id,
@@ -90,12 +95,13 @@ class Food {
       category: category ?? this.category,
       availableQuantity: availableQuantity ?? this.availableQuantity,
       isVeg: isVeg ?? this.isVeg,
+      shopName: shopName ?? this.shopName,
     );
   }
 
   @override
   String toString() {
-    return 'Food(id: $id, name: $name)';
+    return 'Food(id: $id, name: $name, shopName: $shopName)';
   }
 
   @override

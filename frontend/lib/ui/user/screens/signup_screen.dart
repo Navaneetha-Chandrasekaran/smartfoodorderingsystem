@@ -7,6 +7,9 @@ import '../../../models/error_dialog.dart';
 import '../../../models/titles.dart';
 import 'login_screen.dart';
 import 'otp_screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -89,14 +92,100 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final response = await _signupAuth.registerStudent(name, email, phone, password, confirmPassword);
 
     if (response['success']) {
-      _showSuccessDialog("Signup Successful", "✅ OTP has been sent to your email");
-
+      if (response['warning'] != null) {
+        // Show warning dialog with option to resend OTP
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: const [
+                Icon(Icons.warning, color: Colors.orange),
+                SizedBox(width: 8),
+                Text("Registration Successful"),
+              ],
+            ),
+            content: Text("${response['message']}\n\n${response['warning']}"),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context); // Close warning dialog
+                  
+                  // Show loading indicator
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(child: CircularProgressIndicator()),
+                  );
+                  
+                  // Call resend OTP endpoint
+                  try {
+                    final baseUrl = dotenv.env['API_BASE_URL'];
+                    if (baseUrl == null) {
+                      throw Exception('API_BASE_URL not found in environment variables');
+                    }
+                    
+                    final resendResponse = await http.post(
+                      Uri.parse('$baseUrl/auth/resend-otp'),
+                      headers: {'Content-Type': 'application/json'},
+                      body: json.encode({'email': email}),
+                    );
+                    
+                    if (!context.mounted) return; // Check if context is still valid
+                    Navigator.pop(context); // Close loading indicator
+                    
+                    if (resendResponse.statusCode == 200) {
+                      if (!context.mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => OtpScreen(email: response['email']),
         ),
       );
+                    } else {
+                      if (!context.mounted) return;
+                      ErrorDialog.show(
+                        context,
+                        title: "OTP Resend Failed",
+                        message: "Please try again or contact support. Error: ${resendResponse.body}",
+                      );
+                    }
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    Navigator.pop(context); // Close loading indicator
+                    ErrorDialog.show(
+                      context,
+                      title: "Error",
+                      message: "Failed to resend OTP: $e",
+                    );
+                  }
+                },
+                child: const Text("Resend OTP"),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close warning dialog
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => OtpScreen(email: response['email']),
+                    ),
+                  );
+                },
+                child: const Text("Continue Anyway"),
+              ),
+            ],
+          ),
+        );
+      } else {
+        _showSuccessDialog("Signup Successful", "✅ OTP has been sent to your email");
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OtpScreen(email: response['email']),
+          ),
+        );
+      }
     } else {
       ErrorDialog.show(
         context,

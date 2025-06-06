@@ -102,7 +102,7 @@ class _CartTileState extends State<CartTile> {
                     setState(() {});
                   },
                   onDecrement: () {
-                    foodMenu.removeFromCart(widget.cartItem);
+                    foodMenu.removeFromCart(widget.cartItem.food);
                     setState(() {});
                   },
                 ),

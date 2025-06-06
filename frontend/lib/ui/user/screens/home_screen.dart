@@ -617,8 +617,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               _selectedShopId = shop.id;
             });
             
-            // Navigate if it's a special shop
-            if (shop.name.toLowerCase() == 'isthara' && shop.id != null) {
+            // Navigate to shop screen for all shops
+            if (shop.id != null) {
               Navigation.navigateTo(context, IstharaScreen(shopId: shop.id!));
             }
           },

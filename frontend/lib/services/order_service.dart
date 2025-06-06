@@ -125,18 +125,26 @@ class OrderService {
     try {
       print("🔄 Fetching orders from backend...");
       
+      // Get current user ID
+      final userId = await auth.AuthService.getCurrentUserId();
+      if (userId == null) {
+        print("❌ No user ID found");
+        return [];
+      }
+      
       final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
       final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
       final baseUrl = dotenv.env['API_BASE_URL'];
       
       // Use API_BASE_URL if available, otherwise construct from host
       final uri = baseUrl != null 
-          ? Uri.parse('$baseUrl/orders/getorder/$shopId')
+          ? Uri.parse('$baseUrl/orders/getorder/$shopId/$userId')  // Modified to include userId
           : (isSecure 
-          ? Uri.https(host, '/api/orders/getorder/$shopId')
-              : Uri.http(host, '/api/orders/getorder/$shopId'));
+          ? Uri.https(host, '/api/orders/getorder/$shopId/$userId')
+              : Uri.http(host, '/api/orders/getorder/$shopId/$userId'));
 
       print("📤 Fetching orders from: $uri");
+      print("👤 Filtering for user ID: $userId");
       
       // Get auth headers
       final headers = await auth.AuthService.getAuthHeaders();
@@ -266,88 +274,39 @@ class OrderService {
 
   Future<bool> cancelOrder(String orderId, String reason) async {
     try {
-      final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
-      final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      // Use the updateorder endpoint instead of cancelorder
-      final uri = isSecure
-          ? Uri.https(host, '/api/orders/updateorder')
-          : Uri.http(host, '/api/orders/updateorder');
+      final baseUrl = dotenv.env['API_BASE_URL'];
+      if (baseUrl == null) {
+        print("❌ API_BASE_URL not found in environment variables");
+        return false;
+      }
 
-      // Get auth headers with JWT token
+      final uri = Uri.parse('$baseUrl/orders/updateorder');
       final headers = await auth.AuthService.getAuthHeaders();
-      headers['Content-Type'] = 'application/json';
 
       print("📤 Cancelling order #$orderId with reason: $reason");
-      print("🔄 Using endpoint: $uri");
-      
-      // Create request body
-      final requestBody = {
-        'order_id': orderId,
-        'status': 'Pending', // Use a valid enum value from the database
-        'cancel_reason': reason,
-        'is_cancellation': true // Add a flag to indicate this is a cancellation operation
-      };
-      
-      print("📦 Request payload: ${json.encode(requestBody)}");
       
       final response = await http.put(
         uri,
         headers: headers,
-        body: json.encode(requestBody),
+        body: jsonEncode({
+          'order_id': orderId,
+          'status': 'Cancelled',
+          'cancel_reason': reason,
+          'is_cancellation': true
+        }),
       );
 
-      print("📥 Received response code: ${response.statusCode}");
-      if (response.body.isNotEmpty) {
-        print("📄 Complete response body: ${response.body}");
-      }
+      print("📥 Received response: ${response.statusCode} - ${response.body}");
 
       if (response.statusCode == 200) {
-        try {
           final data = jsonDecode(response.body);
-          final success = data['message'] != null;
-          
-          if (success) {
-            print("✅ Successfully cancelled order #$orderId");
-            // If cancellation was successful, broadcast status update to subscribers
-            if (_onStatusUpdate != null) {
-              _onStatusUpdate!({
-                'order_id': orderId,
-                'new_status': 'Pending', // Use the same status value we sent to the server
-                'cancel_reason': reason,
-                'is_cancelled': true // Flag to indicate cancellation
-              });
+        return data['status'] == 'Cancelled';
             }
-          } else {
-            print("❌ Server returned error for cancelling order #$orderId");
-          }
-          
-          return success;
-        } catch (e) {
-          print("❌ Error parsing cancel response: $e");
+      
+      print("❌ Failed to cancel order: ${response.body}");
           return false;
-        }
-      } else if (response.statusCode == 404) {
-        print("❌ Order #$orderId not found (404)");
-        return false;
-      } else if (response.statusCode == 401) {
-        print("❌ Authentication error (401) - Token may be invalid");
-        
-        // Try validating and refreshing the token
-        final tokenValid = await login_auth.AuthService.validateToken();
-        if (tokenValid) {
-          print("🔑 Token is valid, retrying cancellation...");
-          // Retry with validated token (recursive call)
-          return await cancelOrder(orderId, reason);
-        } else {
-          print("❌ Token validation failed");
-          return false;
-        }
-      } else {
-        print("❌ Failed to cancel order: ${response.statusCode}");
-        return false;
-      }
     } catch (e) {
-      print('❌ Error cancelling order: $e');
+      print("❌ Error cancelling order: $e");
       return false;
     }
   }

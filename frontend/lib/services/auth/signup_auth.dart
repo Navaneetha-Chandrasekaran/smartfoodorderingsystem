@@ -48,6 +48,7 @@ class SignupAuth {
     final url = Uri.parse('$baseUrl/auth/register/student');
 
     try {
+      print('🔄 Attempting to register student...');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -59,6 +60,9 @@ class SignupAuth {
           'confirmPassword': confirmPassword,
         }),
       );
+
+      print('📥 Registration response status: ${response.statusCode}');
+      print('📥 Registration response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -81,17 +85,32 @@ class SignupAuth {
           await prefs.setString('role', data['role'] ?? 'student');
         }
 
+        // Check if there was a warning about OTP sending
+        if (data['warning'] != null) {
+          print('⚠️ Warning from server: ${data['warning']}');
+          return {
+            'success': true,
+            'message': data['message'],
+            'email': data['email'],
+            'userId': data['userId'],
+            'warning': data['warning'],
+            'needsOtpResend': true
+          };
+        }
+
         return {
           'success': true,
           'message': data['message'],
           'email': data['email'],
-          'userId': data['userId'], // Include userId in the response
+          'userId': data['userId'],
         };
       } else {
         final error = json.decode(response.body);
+        print('❌ Registration error: ${error['message']}');
         return {'success': false, 'message': error['message']};
       }
     } catch (e) {
+      print('❌ Registration exception: $e');
       return {'success': false, 'message': 'Server error: $e'};
     }
   }

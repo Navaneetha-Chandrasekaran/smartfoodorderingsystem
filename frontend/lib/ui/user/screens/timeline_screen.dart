@@ -80,7 +80,9 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
     // Register WebSocket status update callback
     _orderService.setOnStatusUpdate((data) {
       final orderId = data['order_id'].toString();
-      final newStatus = data['new_status'].toString().toLowerCase().replaceAll(' ', '_');
+      // Capitalize first letter of status
+      final rawStatus = data['new_status'].toString();
+      final newStatus = rawStatus.substring(0, 1).toUpperCase() + rawStatus.substring(1).toLowerCase();
       print("🔄 WebSocket update received: Order #$orderId status changed to $newStatus");
       
       if (mounted) {
@@ -146,23 +148,33 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
 
   Future<void> _loadAllOrders() async {
     try {
+      print('🔄 Loading all orders...');
       final prefs = await SharedPreferences.getInstance();
       
         final latestOrderString = prefs.getString('latest_order_data');
         if (latestOrderString != null) {
+        print('📦 Found latest order data in preferences');
         final latestOrder = json.decode(latestOrderString);
+        print('  - Order ID: ${latestOrder['order_id']}');
+        print('  - Status: ${latestOrder['status']}');
         
         final existingOrdersString = prefs.getString('all_orders');
         List<Map<String, dynamic>> existingOrders = [];
         if (existingOrdersString != null) {
+          print('📦 Found existing orders in preferences');
           final List<dynamic> decoded = json.decode(existingOrdersString);
           existingOrders = decoded.cast<Map<String, dynamic>>();
+          print('  - Total existing orders: ${existingOrders.length}');
+          for (var order in existingOrders) {
+            print('  - Order #${order['order_id']} status: ${order['status']}');
+          }
         }
 
         bool orderExists = existingOrders.any((order) => 
           order['order_id'] == latestOrder['order_id']);
 
         if (!orderExists) {
+          print('📝 Adding latest order to existing orders');
           existingOrders.insert(0, latestOrder);
           await prefs.setString('all_orders', json.encode(existingOrders));
         }
@@ -171,14 +183,22 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
             orders = existingOrders;
           selectedOrder = existingOrders.isNotEmpty ? existingOrders[0] : null;
             isLoading = false;
+          
+          print('📊 Updated state:');
+          print('  - Total orders: ${orders.length}');
+          print('  - Selected order: ${selectedOrder != null ? '#${selectedOrder!['order_id']}' : 'null'}');
+          if (selectedOrder != null) {
+            print('  - Selected order status: ${selectedOrder!['status']}');
+          }
           });
       } else {
+        print('⚠️ No latest order data found in preferences');
           setState(() {
             isLoading = false;
           });
       }
     } catch (e) {
-      print('Error loading orders: $e');
+      print('❌ Error loading orders: $e');
         setState(() {
           isLoading = false;
         });
@@ -231,6 +251,13 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
             String status = order['status']?.toString().toLowerCase().replaceAll(' ', '_') ?? 'pending';
             print("📊 Processing order #$orderId with status: $status");
             
+            // Skip cancelled orders
+            if (status == 'cancelled' || order['is_cancelled'] == true || 
+                (order['cancel_reason'] != null && order['cancel_reason'].toString().isNotEmpty)) {
+              print("⏭️ Skipping cancelled order #$orderId");
+              continue;
+            }
+            
             // Ensure items are properly formatted
             final List<Map<String, dynamic>> processedItems = (order['items'] as List<dynamic>? ?? []).map((item) {
               return {
@@ -279,10 +306,15 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
             for (var existingOrder in orders) {
               final existingOrderId = existingOrder['order_id'].toString();
               final existingStatus = existingOrder['status'].toString().toLowerCase();
+              final isCancelled = existingOrder['is_cancelled'] == true || 
+                                existingStatus == 'cancelled' ||
+                                (existingOrder['cancel_reason'] != null && 
+                                 existingOrder['cancel_reason'].toString().isNotEmpty);
               
-              if ((existingStatus == 'completed' || existingStatus == 'cancelled') && 
+              // Only retain completed (not cancelled) orders
+              if (existingStatus == 'completed' && !isCancelled && 
                   !processedOrderIds.contains(existingOrderId)) {
-                print("📋 Retaining completed order #$existingOrderId with status: $existingStatus");
+                print("📋 Retaining completed order #$existingOrderId");
                 updatedOrders.add(existingOrder);
               }
             }
@@ -291,11 +323,12 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
           // Sort orders by status priority
           updatedOrders.sort((a, b) {
             final getPriority = (String status) {
-              if (status == 'pending') return 0;
-              if (status == 'confirmed' || status == 'preparing') return 1;
-              if (status == 'ready_for_pickup') return 2;
-              if (status == 'completed') return 3;
-              if (status == 'cancelled') return 4;
+              final normalizedStatus = status.toLowerCase();
+              if (normalizedStatus == 'pending') return 0;
+              if (normalizedStatus == 'confirmed' || normalizedStatus == 'preparing') return 1;
+              if (normalizedStatus == 'ready for pickup') return 2;
+              if (normalizedStatus == 'delivered') return 3;
+              if (normalizedStatus == 'cancelled') return 4;
               return 5;
             };
             
@@ -385,12 +418,13 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
                                 _buildOrderedItems(),
                                 const SizedBox(height: 20),
                                 _buildOrderStatus(),
+                                const SizedBox(height: 20),
+                                _buildCancelButton(),
                               ],
                             ),
                           ),
                         ),
                       ),
-                    _buildCancelButton(),
                   ],
                 ),
       ),
@@ -784,17 +818,25 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
               final item = items[index];
               final itemPrice = (item['price'] ?? 0.0) * (item['quantity'] ?? 1);
               
+              // Debug print for image URL construction
+              print('🖼️ Processing image for item: ${item['name']}');
+              print('  - Raw image path: ${item['image']}');
+              final imageUrl = getFullImageUrl(item['image']);
+              print('  - Constructed URL: $imageUrl');
+              
               return ListTile(
                 leading: item['image'] != null && item['image'].toString().isNotEmpty
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
-                          getFullImageUrl(item['image']),
+                          imageUrl,
                           width: 50,
                           height: 50,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             print("❌ Error loading image: $error");
+                            print("  - URL attempted: $imageUrl");
+                            print("  - Stack trace: $stackTrace");
                             return Container(
                               width: 50,
                               height: 50,
@@ -806,6 +848,25 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
                                 Icons.fastfood,
                                 color: Colors.grey[400],
                                 size: 24,
+                              ),
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded / 
+                                        loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
                               ),
                             );
                           },
@@ -961,7 +1022,7 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
     int currentStep = 0;
     if (status == 'pending') currentStep = 1;
     else if (status == 'confirmed' || status == 'preparing') currentStep = 2;
-    else if (status == 'ready_for_pickup') currentStep = 3;
+    else if (status == 'ready for pickup') currentStep = 3;
     else if (status == 'completed') currentStep = 4;
     else if (status == 'cancelled') currentStep = 0;
 
@@ -1149,19 +1210,36 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
   }
   
   Widget _buildCancelButton() {
+    print('🔍 Checking cancel button visibility conditions:');
+    print('  - Orders count: ${orders.length}');
+    print('  - Selected order: ${selectedOrder != null ? 'exists' : 'null'}');
+    
     if (selectedOrder == null) {
       print('❌ Cancel button hidden - No order selected');
       return const SizedBox.shrink();
     }
     
-    final status = selectedOrder!['status']?.toString().toLowerCase() ?? '';
+    // Normalize the status: convert to lowercase and replace spaces with underscores
+    final status = selectedOrder!['status']?.toString().toLowerCase().replaceAll(' ', '_') ?? '';
     print('📊 Order details:');
     print('  - Order ID: ${selectedOrder!['order_id']}');
     print('  - Status: $status');
     print('  - Raw status: ${selectedOrder!['status']}');
+    print('  - Is cancelled flag: ${selectedOrder!['is_cancelled']}');
+    print('  - Cancel reason: ${selectedOrder!['cancel_reason']}');
 
-    if (status != 'pending' && status != 'confirmed') {
-      print('❌ Cancel button hidden - Invalid status: $status');
+    // Check if order is already cancelled
+    final isCancelled = selectedOrder!['is_cancelled'] == true || 
+                       selectedOrder!['cancel_reason'] != null;
+
+    // Only show cancel button for pending or confirmed orders that aren't already cancelled
+    if (!['pending', 'confirmed'].contains(status)) {
+      print('❌ Cancel button hidden - Invalid status: $status (must be pending or confirmed)');
+      return const SizedBox.shrink();
+    }
+    
+    if (isCancelled) {
+      print('❌ Cancel button hidden - Order is already cancelled');
       return const SizedBox.shrink();
     }
     
@@ -1278,26 +1356,28 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
   }
 
   void _confirmCancellation(String reason) {
+    // Store BuildContext locally
     final BuildContext dialogContext = context;
+    
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: dialogContext,
+      builder: (BuildContext context) => AlertDialog(
         title: const Text('Confirm Cancellation'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             const Text('Are you sure you want to cancel this order?'),
-                        const SizedBox(height: 8),
-                        Text(
+            const SizedBox(height: 8),
+            Text(
               'Reason: $reason',
-                          style: TextStyle(
+              style: TextStyle(
                 color: Colors.grey[600],
                 fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -1305,36 +1385,98 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
           ),
           ElevatedButton(
             onPressed: () async {
+              // Close the confirmation dialog
               Navigator.pop(context);
-              final orderId = selectedOrder!['order_id'].toString();
+              
+              if (!mounted) return;
+
+              // Store current order data before cancellation
+              final orderToCancel = Map<String, dynamic>.from(selectedOrder!);
+              final orderId = orderToCancel['order_id'].toString();
               
               try {
+                // Optimistically update UI
+                setState(() {
+                  orders.removeWhere((order) => order['order_id'].toString() == orderId);
+                  if (orders.isNotEmpty) {
+                    selectedOrder = orders[0];
+                  } else {
+                    selectedOrder = null;
+                  }
+                });
+
                 final success = await _orderService.cancelOrder(orderId, reason);
-                if (success && mounted) {
+                
+                if (success) {
+                  if (!mounted) return;
+
+                  // Move to completed orders in SharedPreferences
+                  final prefs = await SharedPreferences.getInstance();
+                  final completedOrdersString = prefs.getString('completed_orders') ?? '[]';
+                  List<dynamic> completedOrders = json.decode(completedOrdersString);
+                  
+                  orderToCancel['status'] = 'cancelled';
+                  orderToCancel['is_cancelled'] = true;
+                  orderToCancel['cancel_reason'] = reason;
+                  orderToCancel['cancelled_at'] = DateTime.now().toIso8601String();
+                  
+                  completedOrders.add(orderToCancel);
+                  await prefs.setString('completed_orders', json.encode(completedOrders));
+                  
+                  // Update FoodMenu provider
+                  if (mounted) {
+                    final foodMenu = Provider.of<FoodMenu>(dialogContext, listen: false);
+                    await foodMenu.markOrderAsCancelled(orderId, reason);
+                  }
+                  
+                  // Save updated orders list
+                  await _saveOrderDataToPrefs();
+                  
+                  if (!mounted) return;
+                  
+                  // Navigate to order history screen
+                  Navigator.of(dialogContext).pushReplacementNamed('/order_history').then((_) {
+                    if (!mounted) return;
+                    // Show success message after navigation is complete
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('Order cancelled successfully'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  });
+                } else {
+                  if (!mounted) return;
+                  
+                  // Revert optimistic update on failure
                   setState(() {
-                    orders.removeWhere((order) => order['order_id'].toString() == orderId);
-                    if (selectedOrder!['order_id'].toString() == orderId) {
-                      selectedOrder = orders.isNotEmpty ? orders[0] : null;
+                    if (!orders.contains(orderToCancel)) {
+                      orders.add(orderToCancel);
+                      orders.sort((a, b) => a['order_id'].toString().compareTo(b['order_id'].toString()));
                     }
+                    selectedOrder = orderToCancel;
                   });
                   
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     const SnackBar(
-                      content: Text('Order cancelled successfully'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-         } catch (e) {
-                print('❌ Error cancelling order: $e');
-                if (mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(
-                      content: Text('Error cancelling order'),
+                      content: Text('Failed to cancel order. Please try again.'),
                       backgroundColor: Colors.red,
+                      duration: Duration(seconds: 3),
                     ),
                   );
                 }
+              } catch (e) {
+                print('❌ Error cancelling order: $e');
+                if (!mounted) return;
+                
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(
+                    content: Text('Error cancelling order: $e'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
               }
             },
             style: ElevatedButton.styleFrom(
@@ -1351,17 +1493,31 @@ class _TimelineScreenState extends State<TimelineScreen> with SingleTickerProvid
   // Helper method to get full image URL
   String getFullImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) {
+      print('⚠️ Empty or null image path');
       return '';
     }
     
     // If it's already a full URL, return as is
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      print('✅ Using full URL: $imagePath');
       return imagePath;
     }
     
-    // Otherwise, construct the full URL using the base URL from environment
-    final baseUrl = dotenv.env['API_URL'] ?? 'http://localhost:3000';
-    return '$baseUrl/$imagePath';
+    // Get base URL from environment
+    final baseUrl = dotenv.env['API_BASE_URL'];
+    if (baseUrl == null) {
+      print('⚠️ API_BASE_URL not found in environment variables');
+      return '';
+    }
+    
+    // Clean up the image path and base URL
+    final cleanImagePath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
+    final cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    
+    // Construct the full URL
+    final fullUrl = '$cleanBaseUrl/$cleanImagePath';
+    print('🔄 Constructed image URL: $fullUrl');
+    return fullUrl;
   }
 
   // Constants

@@ -50,9 +50,16 @@ Future<void> main() async {
 
     try {
       await dotenv.load(fileName: ".env");
-      print("✅ .env loaded: API_URL = ${dotenv.env['API_URL']}");
+      if (dotenv.env['API_BASE_URL'] == null) {
+        throw Exception('API_BASE_URL not found in .env file');
+      }
+      print("✅ .env loaded successfully");
+      print("📍 API_URL = ${dotenv.env['API_URL']}");
+      print("🌐 API_BASE_URL = ${dotenv.env['API_BASE_URL']}");
     } catch (e) {
       print("❌ Failed to load .env: $e");
+      // You might want to show an error dialog here
+      return;
     }
 
     try {
@@ -60,6 +67,7 @@ Future<void> main() async {
       print("✅ SharedPreferences initialized successfully!");
     } catch (e) {
       print("❌ Error initializing SharedPreferences: $e");
+      return;
     }
 
     // Initialize OrderService
