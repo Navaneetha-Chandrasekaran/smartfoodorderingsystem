@@ -44,6 +44,7 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
     super.initState();
     _initializeFloatingController();
     _initializeShopAndOrders();
+    _setupWebSocket();
   }
 
   void _initializeFloatingController() {
@@ -51,6 +52,63 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+  }
+
+  void _setupWebSocket() async {
+    try {
+      final shopService = ShopService();
+      final shopId = await shopService.getStoredShopId();
+      
+      if (shopId != null) {
+        print("🔌 Setting up WebSocket for shop $shopId");
+        _orderService.initializeWebSocket(shopId, shopId);  // Using shopId as both userId and shopId
+        
+        // Register WebSocket status update callback
+        _orderService.setOnStatusUpdate((data) {
+          final orderId = data['order_id'].toString();
+          final newStatus = data['new_status'].toString();
+          print("🔄 WebSocket update received: Order #$orderId status changed to $newStatus");
+          
+          if (mounted) {
+            setState(() {
+              for (var order in orders) {
+                if (order['order_id'].toString() == orderId) {
+                  print("📝 Updating order #$orderId from ${order['status']} to $newStatus");
+                  order['status'] = newStatus;
+                }
+              }
+            });
+          }
+        });
+
+        // Listen for new orders through periodic refresh instead of WebSocket
+        Timer.periodic(const Duration(seconds: 30), (timer) {
+          if (mounted) {
+            _fetchOrders();
+          }
+        });
+      }
+    } catch (e) {
+      print("❌ Error setting up WebSocket: $e");
+    }
+  }
+
+  void _sortOrders() {
+    orders.sort((a, b) {
+      final statusA = a['status'].toString().toLowerCase();
+      final statusB = b['status'].toString().toLowerCase();
+      
+      final getPriority = (String status) {
+        if (status == 'pending') return 0;
+        if (status == 'confirmed' || status == 'preparing') return 1;
+        if (status == 'ready_for_pickup') return 2;
+        if (status == 'completed') return 3;
+        if (status == 'cancelled') return 4;
+        return 5;
+      };
+      
+      return getPriority(statusA).compareTo(getPriority(statusB));
+    });
   }
 
   @override
@@ -75,6 +133,13 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
       });
 
       await _fetchOrders();
+      
+      // Set up periodic refresh
+      Timer.periodic(const Duration(minutes: 1), (timer) {
+        if (mounted) {
+          _fetchOrders();
+        }
+      });
     } catch (e) {
       print("❌ Error initializing orders: $e");
       setState(() {
@@ -84,70 +149,68 @@ class _CanteenDashboardState extends State<CanteenDashboard> with SingleTickerPr
   }
 
   Future<void> _fetchOrders() async {
-    if (_currentShopId == null) return;
+    if (_currentShopId == null) {
+      print("❌ Cannot fetch orders: No shop ID available");
+      setState(() {
+        isLoading = false;
+      });
+      return;
+    }
 
     try {
       print("🔄 Fetching orders for shop ID: $_currentShopId");
-      final fetchedOrders = await _canteenOrderService.fetchCanteenOrders(_currentShopId!);
+      setState(() => isLoading = true);
+      
+      final fetchedOrders = await _canteenOrderService.fetchCanteenOrders();
       print("✅ Fetched ${fetchedOrders.length} orders from backend");
+      
+      if (!mounted) return;
 
-      if (mounted) {
-        setState(() {
-          // Store existing completed orders before updating
-          final existingCompletedOrders = orders.where((order) => 
-            order['status'].toString().toLowerCase() == 'completed' ||
-            order['status'].toString().toLowerCase() == 'cancelled'
-          ).toList();
-          
-          // Process new orders
-          orders = fetchedOrders.map((order) {
-            // Normalize status: lowercase, replace spaces with underscores
-            final rawStatus = order['status']?.toString() ?? '';
-            final normalizedStatus = rawStatus.toLowerCase().replaceAll(' ', '_');
-            return {
-              ...order,
-              'status': normalizedStatus,
-            };
-          }).toList();
-          
-          // Add back completed orders that weren't in the API response
-          final fetchedOrderIds = orders.map((o) => o['order_id'].toString()).toSet();
-          for (final completedOrder in existingCompletedOrders) {
-            final orderId = completedOrder['order_id'].toString();
-            if (!fetchedOrderIds.contains(orderId)) {
-              print("📋 Retaining completed order #$orderId in dashboard");
-              orders.add(completedOrder);
-            }
-          }
-          
-          // Sort orders by status priority
-          orders.sort((a, b) {
-            final statusA = a['status'].toString().toLowerCase();
-            final statusB = b['status'].toString().toLowerCase();
-            
-            // Define status priority (lower number = higher priority)
-            final getPriority = (String status) {
-              if (status == 'pending') return 0;
-              if (status == 'confirmed' || status == 'preparing') return 1;
-              if (status == 'ready_for_pickup') return 2;
-              if (status == 'completed') return 3;
-              if (status == 'cancelled') return 4;
-              return 5; // unknown status
-            };
-            
-            return getPriority(statusA).compareTo(getPriority(statusB));
-          });
-
-          print("📊 Dashboard now has ${orders.length} orders total (including completed)");
-          isLoading = false;
-        });
-      }
+      setState(() {
+        orders = fetchedOrders.map((order) {
+          // Ensure all required fields are present
+          return {
+            'order_id': order['order_id']?.toString() ?? '',
+            'user_id': order['user_id']?.toString() ?? '',
+            'pickup_time': order['pickup_time']?.toString() ?? '',
+            'payment_method': order['payment_method']?.toString() ?? '',
+            'total_amount': order['total_amount'] ?? 0.0,
+            'otp': order['otp']?.toString() ?? '',
+            'status': (order['status']?.toString() ?? 'pending').toLowerCase().replaceAll(' ', '_'),
+            'items': (order['items'] as List<dynamic>?)?.map((item) => {
+              'food_id': item['food_id']?.toString() ?? '',
+              'quantity': item['quantity'] ?? 1,
+              'name': item['name']?.toString() ?? 'Unknown Item',
+              'description': item['description']?.toString() ?? '',
+              'image': item['image']?.toString() ?? '',
+              'price': item['price'] ?? 0.0,
+              'type': item['type']?.toString() ?? '',
+              'category': item['category']?.toString() ?? '',
+            }).toList() ?? [],
+          };
+        }).toList();
+        
+        _sortOrders();
+        print("📊 Dashboard now has ${orders.length} orders");
+        print("📝 Order statuses: ${orders.map((o) => o['status']).toSet()}");
+        isLoading = false;
+      });
     } catch (e) {
       print("❌ Error fetching orders: $e");
+      setState(() {
+        isLoading = false;
+        orders = []; // Clear orders on error
+      });
+      
+      // Show error to user
       if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to fetch orders: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }

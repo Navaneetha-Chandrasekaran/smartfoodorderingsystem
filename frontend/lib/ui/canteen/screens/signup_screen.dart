@@ -7,6 +7,23 @@ import '../../../models/error_dialog.dart';
 import '../../../models/titles.dart';
 import '../../user/screens/otp_screen.dart';
 import 'login_screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+class Shop {
+  final String id;
+  final String name;
+
+  Shop({required this.id, required this.name});
+
+  factory Shop.fromJson(Map<String, dynamic> json) {
+    return Shop(
+      id: json['id'].toString(),
+      name: json['name'],
+    );
+  }
+}
 
 class CanteenSignUpScreen extends StatefulWidget {
   const CanteenSignUpScreen({super.key});
@@ -27,6 +44,40 @@ class _CanteenSignUpScreenState extends State<CanteenSignUpScreen> {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
+  List<Shop> _shops = [];
+  Shop? _selectedShop;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchShops();
+  }
+
+  Future<void> _fetchShops() async {
+    try {
+      final baseUrl = dotenv.env['API_BASE_URL'];
+      if (baseUrl == null) {
+        throw Exception('API_BASE_URL not found in environment variables');
+      }
+
+      final response = await http.get(Uri.parse('$baseUrl/admin/shopNames'));
+      if (response.statusCode == 200) {
+        final List<dynamic> shopsJson = json.decode(response.body);
+        setState(() {
+          _shops = shopsJson.map((shop) => Shop.fromJson(shop)).toList();
+        });
+      } else {
+        throw Exception('Failed to load shops');
+      }
+    } catch (e) {
+      print('Error fetching shops: $e');
+      ErrorDialog.show(
+        context,
+        title: "Error",
+        message: "Failed to load shops. Please try again.",
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -62,11 +113,11 @@ class _CanteenSignUpScreenState extends State<CanteenSignUpScreen> {
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+    if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty || confirmPassword.isEmpty || _selectedShop == null) {
       ErrorDialog.show(
         context,
         title: "Missing Fields",
-        message: "Please fill all fields.",
+        message: "Please fill all fields and select a shop.",
       );
       setState(() {
         _isLoading = false;
@@ -74,7 +125,27 @@ class _CanteenSignUpScreenState extends State<CanteenSignUpScreen> {
       return;
     }
 
-    final response = await _canteenReg.registerCanteenStaff(name, email, phone, password, confirmPassword);
+    // Only block student/faculty emails
+    if (email.toLowerCase().endsWith('@shanmugha.edu.in')) {
+      ErrorDialog.show(
+        context,
+        title: "Invalid Email",
+        message: "This app is for canteen staff only. If you are a student or faculty member, please use the student app instead.",
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final response = await _canteenReg.registerCanteenStaff(
+      name, 
+      email, 
+      phone, 
+      password, 
+      confirmPassword,
+      _selectedShop!.id,
+    );
 
     if (response['success']) {
       _showSuccessDialog("Signup Successful", "✅ OTP has been sent to your email");
@@ -82,7 +153,10 @@ class _CanteenSignUpScreenState extends State<CanteenSignUpScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => OtpScreen(email: response['email']),
+          builder: (context) => OtpScreen(
+            email: response['email'],
+            isCanteenStaff: true,
+          ),
         ),
       );
     } else {
@@ -197,6 +271,35 @@ class _CanteenSignUpScreenState extends State<CanteenSignUpScreen> {
                       isPassword: true,
                       isPasswordVisible: _isConfirmPasswordVisible,
                       togglePasswordVisibility: toggleConfirmPasswordVisibility,
+                    ),
+
+                    // Shop Selection Dropdown
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<Shop>(
+                          isExpanded: true,
+                          hint: const Text("Select Shop"),
+                          value: _selectedShop,
+                          items: _shops.map((Shop shop) {
+                            return DropdownMenuItem<Shop>(
+                              value: shop,
+                              child: Text(shop.name),
+                            );
+                          }).toList(),
+                          onChanged: (Shop? newValue) {
+                            setState(() {
+                              _selectedShop = newValue;
+                            });
+                          },
+                        ),
+                      ),
                     ),
 
                     SizedBox(height: screenHeight * 0.02),

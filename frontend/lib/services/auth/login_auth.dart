@@ -64,6 +64,17 @@ class AuthService {
         print("👑 Storing role: $role");
         await prefs.setString('role', role ?? '');
 
+        // Store shop_id for canteen staff
+        if (role == 'canteen_staff') {
+          final shopId = data['shop_id']?.toString();
+          print("🏪 Storing shop_id: $shopId");
+          if (shopId != null) {
+            await prefs.setString('shop_id', shopId);
+          } else {
+            print("⚠️ Warning: No shop_id received for canteen staff");
+          }
+        }
+
         // Verify the stored data
         final storedToken = prefs.getString('token');
         print("✅ Verified stored token: ${storedToken != null ? 'Token exists' : 'Token missing'}");

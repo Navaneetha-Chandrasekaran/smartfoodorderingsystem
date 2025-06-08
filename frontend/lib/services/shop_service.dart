@@ -58,11 +58,19 @@ class ShopService {
   Future<String?> getStoredShopId() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? shopId = prefs.getString('selectedShopId');
-      print("Fetched Shop ID: $shopId");
+      // First try the canteen staff shop_id
+      String? shopId = prefs.getString('shop_id');
+      if (shopId != null) {
+        print("📍 Found canteen staff shop_id: $shopId");
+        return shopId;
+      }
+      
+      // Fallback to selected shop ID (for other contexts)
+      shopId = prefs.getString('selectedShopId');
+      print("📍 Fetched selected shop_id: $shopId");
       return shopId;
     } catch (e) {
-      print("Error fetching Shop ID: $e");
+      print("❌ Error fetching Shop ID: $e");
       return null;
     }
   }

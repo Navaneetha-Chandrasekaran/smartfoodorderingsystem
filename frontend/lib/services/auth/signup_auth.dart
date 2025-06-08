@@ -123,12 +123,12 @@ class SignupAuth {
 
 
 class CanteenReg {
-  final String baseUrl = dotenv.env['API_BASE_URL']!; // ✅ Use correct API URL
+  final String baseUrl = dotenv.env['API_BASE_URL']!;
 
   /// ✅ **Register Canteen Staff**
   Future<Map<String, dynamic>> registerCanteenStaff(
-      String name, String email, String phone, String password, String confirmPassword) async {
-    final url = Uri.parse('$baseUrl/auth/register/canteenstaff'); // Updated API endpoint for canteen staff
+      String name, String email, String phone, String password, String confirmPassword, String shop_id) async {
+    final url = Uri.parse('$baseUrl/auth/register/canteenstaff');
 
     try {
       final response = await http.post(
@@ -140,6 +140,7 @@ class CanteenReg {
           'phone': phone,
           'password': password,
           'confirmPassword': confirmPassword,
+          'shop_id': shop_id,
         }),
       );
 
@@ -164,6 +165,7 @@ class CanteenReg {
             await prefs.setString('email', email);
             await prefs.setString('name', name);
             await prefs.setString('role', data['role'] ?? 'canteen_staff');
+            await prefs.setString('shop_id', shop_id);
           }
           
           return {'success': true, 'message': data['message'], 'email': data['email']};

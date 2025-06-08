@@ -16,12 +16,18 @@ import 'shop_service.dart'; // Added import for ShopService
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OrderService {
+  final String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
   WebSocketChannel? _channel;
-  Function(Map<String, dynamic>)? _onStatusUpdate;
   String? _currentUserId;
   String? _currentShopId;
+  Function(Map<String, dynamic>)? _onStatusUpdate;
   Timer? _reconnectTimer;
   Timer? _pollingTimer;
+
+  Future<String?> _getAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
 
   bool get isWebSocketConnected => _channel != null && _channel?.closeCode == null;
 
@@ -33,7 +39,6 @@ class OrderService {
     try {
       final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
       final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      final baseUrl = dotenv.env['API_BASE_URL'];
       
       // Use API_BASE_URL if available, otherwise construct from host
       final uri = baseUrl != null 
@@ -134,7 +139,6 @@ class OrderService {
       
       final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
       final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      final baseUrl = dotenv.env['API_BASE_URL'];
       
       // Use API_BASE_URL if available, otherwise construct from host
       final uri = baseUrl != null 
@@ -231,55 +235,47 @@ class OrderService {
     }
   }
 
-  Future<bool> updateOrderStatus(String orderId, String newStatus) async {
+  Future<bool> updateOrderStatus(String orderId, String newStatus, {String? otp, bool verified = false}) async {
     try {
-      final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
-      final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      final uri = isSecure
-          ? Uri.https(host, '/api/orders/updateorder')
-          : Uri.http(host, '/api/orders/updateorder');
-
-      // Get auth headers with JWT token
-      final headers = await auth.AuthService.getAuthHeaders();
-
-      print("📤 Updating order status: $uri");
-      final response = await http.put(
-        uri,
-        headers: headers,
+      final response = await http.post(
+        Uri.parse('$baseUrl/orders/update-status'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': await _getAuthToken() ?? '',
+        },
         body: jsonEncode({
           'order_id': orderId,
           'status': newStatus,
+          'otp': otp,
+          'verified': verified,
         }),
       );
 
-      print("📥 Received response: ${response.statusCode} - ${response.body}");
-
       if (response.statusCode == 200) {
-        try {
-          final data = jsonDecode(response.body);
-          return data['success'] == true;
-        } catch (e) {
-          print("❌ Error parsing response: $e");
-          return false;
-        }
+        print("✅ Order status updated successfully");
+        
+        // Emit status update through WebSocket
+        _channel?.sink.add(jsonEncode({
+          'type': 'status_update',
+          'order_id': orderId,
+          'new_status': newStatus,
+          'userId': _currentUserId,
+          'shopId': _currentShopId,
+        }));
+        
+        return true;
       } else {
-        print("❌ Failed to update order: ${response.statusCode}");
+        print("❌ Failed to update order status: ${response.body}");
         return false;
       }
     } catch (e) {
-      print('❌ Error updating order: $e');
+      print("❌ Error updating order status: $e");
       return false;
     }
   }
 
   Future<bool> cancelOrder(String orderId, String reason) async {
     try {
-      final baseUrl = dotenv.env['API_BASE_URL'];
-      if (baseUrl == null) {
-        print("❌ API_BASE_URL not found in environment variables");
-        return false;
-      }
-
       final uri = Uri.parse('$baseUrl/orders/updateorder');
       final headers = await auth.AuthService.getAuthHeaders();
 
@@ -311,347 +307,186 @@ class OrderService {
     }
   }
 
-  void initializeWebSocket(String userId, String shopId) {
+  void initializeWebSocket(String userId, String shopId) async {
     try {
-      // Only reconnect if the user or shop ID has changed
-      if (_currentUserId == userId && _currentShopId == shopId && isWebSocketConnected) {
-        print("🔄 WebSocket already connected for user $userId and shop $shopId");
-        return;
-      }
-
       _currentUserId = userId;
       _currentShopId = shopId;
+      
+      if (baseUrl == null) {
+        print("❌ API_BASE_URL not found in environment variables");
+        return;
+      }
+      
+      // Parse the base URL
+      final uri = Uri.parse(baseUrl);
+      final isNgrok = uri.host.contains('ngrok-free.app');
+      
+      // Construct WebSocket URL
+      String wsUrl;
+      if (isNgrok) {
+        // For ngrok, we need to use wss:// and the ngrok host
+        wsUrl = 'wss://${uri.host}/ws';
+      } else {
+        // For regular URLs, convert http/https to ws/wss
+        wsUrl = baseUrl.replaceFirst('http://', 'ws://').replaceFirst('https://', 'wss://');
+        wsUrl = '$wsUrl/ws';
+      }
+      
+      // Add query parameters
+      final wsUri = Uri.parse(wsUrl).replace(
+        queryParameters: {
+          'userId': userId,
+          'shopId': shopId,
+          'transport': 'websocket',
+          'EIO': '4',
+        }
+      );
+      
+      print("🔌 Connecting to WebSocket at: $wsUri");
+      print("👤 User ID: $userId");
+      print("🏪 Shop ID: $shopId");
 
-      // Start polling as the reliable mechanism
-      print("🔄 Starting polling as primary update mechanism");
-      _startPolling(userId, shopId);
+      disconnect(); // Close any existing connection
       
-      final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
-      final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      final apiBaseUrl = dotenv.env['API_BASE_URL'];
+      // Create WebSocket connection with retry logic
+      _channel = await _connectWithRetry(wsUri);
+      if (_channel == null) {
+        print("❌ Failed to establish WebSocket connection after retries");
+        _startPolling(); // Fallback to polling
+        return;
+      }
       
-      // Extract domain for detection
-      String domain = host;
-      if (apiBaseUrl != null && apiBaseUrl.isNotEmpty) {
+      print("✅ WebSocket connection established");
+
+      // Join specific rooms
+      _channel?.sink.add(jsonEncode({
+        'type': 'join',
+        'rooms': [
+          'user_$userId',
+          'shop_$shopId',
+          'order_updates'
+        ]
+      }));
+
+      // Set up heartbeat
+      Timer.periodic(const Duration(seconds: 30), (timer) {
+        if (_channel == null) {
+          timer.cancel();
+          return;
+        }
         try {
-          final uri = Uri.parse(apiBaseUrl);
-          domain = uri.host;
+          _channel?.sink.add(jsonEncode({'type': 'ping'}));
         } catch (e) {
-          print("⚠️ Error parsing API_BASE_URL: $e");
-        }
-      }
-      
-      // Check if using ngrok
-      if (domain.contains('ngrok-free.app')) {
-        print("🔍 Detected ngrok URL: $domain");
-        print("ℹ️ Using polling only for ngrok as WebSockets return 404");
-        return; // Skip WebSocket connection for ngrok URLs
-      }
-      
-      // Try WebSocket only for non-ngrok URLs
-      _tryWebSocketConnection(userId, shopId);
-    } catch (e) {
-      print("⚠️ WebSocket initialization failed: $e");
-      _handleConnectionError(userId, shopId);
-    }
-  }
-
-  void _tryWebSocketConnection(String userId, String shopId) {
-    try {
-      final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
-      final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      final apiBaseUrl = dotenv.env['API_BASE_URL'];
-      final wsProtocol = isSecure ? 'wss' : 'ws';
-      
-      // Extract base domain for WebSocket connection
-      String baseWsUrl = '';
-      if (apiBaseUrl != null && apiBaseUrl.isNotEmpty) {
-        // Extract domain from API_BASE_URL
-        final uri = Uri.parse(apiBaseUrl);
-        final domain = uri.host;
-        baseWsUrl = domain;
-        print("🔌 Using baseWsUrl from API_BASE_URL: $baseWsUrl");
-      } else {
-        baseWsUrl = host;
-        print("🔌 Using baseWsUrl from API_HOST: $baseWsUrl");
-      }
-      
-      // Try multiple WebSocket endpoints
-      List<String> wsUrls = [];
-      
-      if (baseWsUrl.contains('ngrok-free.app')) {
-        // For ngrok, don't include the port number in the WebSocket URL
-        final domainOnly = baseWsUrl.split(':')[0]; // Remove any port
-        wsUrls = [
-          '$wsProtocol://$domainOnly/ws', // Standard WebSocket without port
-        ];
-        print("🔌 Using ngrok URL without port: $wsProtocol://$domainOnly/ws");
-      } else {
-        wsUrls = [
-          '$wsProtocol://$baseWsUrl/ws',
-          '$wsProtocol://$baseWsUrl/socket.io/?EIO=4&transport=websocket',
-        ];
-      }
-      
-      // Close existing connection if any
-      try {
-      _channel?.sink.close();
-        _channel = null;
-      } catch (e) {
-        print("⚠️ Error closing existing WebSocket: $e");
-      }
-      
-      // Try each WebSocket URL
-      _tryNextWebSocketUrl(wsUrls, 0, userId, shopId);
-      
-    } catch (e) {
-      print("⚠️ WebSocket connection attempt failed: $e");
-    }
-  }
-  
-  void _tryNextWebSocketUrl(List<String> urls, int index, String userId, String shopId) {
-    if (index >= urls.length) {
-      print("❌ All WebSocket connection attempts failed");
-      return;
-    }
-    
-    final wsUrl = urls[index];
-    print("🔌 Attempting WebSocket connection to: $wsUrl");
-    
-    // Create a flag to track if we've already moved to the next URL
-    bool movedToNextUrl = false;
-    
-    // Use a single timer instead of Future.timeout to avoid zone mismatch
-    Timer? timeoutTimer;
-    timeoutTimer = Timer(const Duration(seconds: 3), () {
-      if (!movedToNextUrl) {
-        movedToNextUrl = true;
-        print("⏱️ WebSocket connection timed out: $wsUrl");
-        timeoutTimer?.cancel();
-        _tryNextWebSocketUrl(urls, index + 1, userId, shopId);
-      }
-    });
-    
-    try {
-      // Create connection synchronously to avoid zone mismatch
-        _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-        
-      // When connection is established, cancel the timeout timer
-      _channel?.ready.then((_) {
-        if (!movedToNextUrl) {
-          movedToNextUrl = true;
-          timeoutTimer?.cancel();
-          print("✅ WebSocket connected successfully to: $wsUrl");
-          
-          // Handle Socket.IO vs standard WebSocket
-          try {
-            if (wsUrl.contains('socket.io')) {
-              // Socket.IO handshake
-        _channel?.sink.add('40');
-        _channel?.sink.add('42["join_user",{"user_id":"$userId"}]');
-              _channel?.sink.add('42["join_canteen",{"shop_id":"$shopId"}]');
-              print("🔗 Sent Socket.IO handshake and room joins");
-            } else {
-              // Standard WebSocket auth
-              _channel?.sink.add(jsonEncode({
-                'type': 'auth',
-                'user_id': userId,
-                'shop_id': shopId
-              }));
-              print("🔐 Sent WebSocket authentication");
-            }
-          } catch (e) {
-            print("⚠️ Error sending WebSocket messages: $e");
-          }
-          
-          _setupWebSocketListener(userId, shopId);
-        }
-      }).catchError((error) {
-        if (!movedToNextUrl) {
-          movedToNextUrl = true;
-          timeoutTimer?.cancel();
-          print("❌ WebSocket connection error: $error");
-          _tryNextWebSocketUrl(urls, index + 1, userId, shopId);
+          print("❌ Error sending heartbeat: $e");
+          timer.cancel();
+          _scheduleReconnect();
         }
       });
-    } catch (e) {
-      if (!movedToNextUrl) {
-        movedToNextUrl = true;
-        timeoutTimer?.cancel();
-        print("❌ WebSocket connection failed: $e");
-        _tryNextWebSocketUrl(urls, index + 1, userId, shopId);
-      }
-    }
-  }
-  
-  void _setupWebSocketListener(String userId, String shopId) {
-    try {
-        _channel?.stream.listen(
-          (message) {
-            print("📨 Received WebSocket message: $message");
-          // Update the UI on the main isolate
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_onStatusUpdate != null) {
-              try {
-                if (message is String && message.startsWith('42')) {
-                  // Socket.IO format
-                  final data = jsonDecode(message.substring(2));
-                  if (data is List && data.length > 1 && data[0] == 'order_status_update') {
-                    _onStatusUpdate!(data[1]);
-                  }
-                } else if (message is String) {
-                  // Try standard JSON format
-                  try {
-                    final data = jsonDecode(message);
-                    if (data is Map && data['type'] == 'order_status_update') {
-                      _onStatusUpdate!(data['data']);
-                    }
-                  } catch (e) {
-                    print("⚠️ Error parsing WebSocket JSON message: $e");
-                  }
-                }
-              } catch (e) {
-                print("❌ Error processing WebSocket message: $e");
-              }
-            }
-          });
-          },
-          onError: (error) {
-            print("❌ WebSocket error: $error");
-          // Handle error on the main isolate
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            try {
-              if (error.toString().contains('not upgraded to websocket') ||
-                  error.toString().contains('Connection refused')) {
-                print("Switching to next WebSocket URL due to connection error");
-              }
-            } catch (e) {
-              print("⚠️ Error in WebSocket error handler: $e");
-            }
-          });
-          },
-          onDone: () {
-            print("🔌 WebSocket connection closed");
-          // Handle connection close on the main isolate
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            try {
-        _setupReconnectionTimer(userId, shopId);
-      } catch (e) {
-              print("⚠️ Error setting up reconnection timer: $e");
-      }
-          });
-        },
-        cancelOnError: false, // Don't cancel on error to prevent freezing
-      );
-    } catch (e) {
-      print("⚠️ Error setting up WebSocket listener: $e");
-    }
-  }
 
-  void _handleConnectionError(String userId, String shopId) {
-    try {
-    _channel = null;
-      
-      // Make sure polling is running
-      if (_pollingTimer == null || !(_pollingTimer?.isActive ?? false)) {
-    _startPolling(userId, shopId);
-      }
-      
-    _setupReconnectionTimer(userId, shopId);
-    } catch (e) {
-      print("⚠️ Error handling connection error: $e");
-    }
-  }
-
-  void _setupReconnectionTimer(String userId, String shopId) {
-    try {
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!isWebSocketConnected) {
-        print("🔄 Attempting to reconnect WebSocket...");
+      _channel?.stream.listen(
+        (message) {
           try {
-            _tryWebSocketConnection(userId, shopId);
+            print("📥 WebSocket message received: $message");
+            final data = jsonDecode(message);
+            
+            if (data['type'] == 'pong') {
+              print("💓 Heartbeat received");
+              return;
+            }
+            
+            if (data['type'] == 'connected') {
+              print("✅ Connection confirmed by server");
+              return;
+            }
+            
+            if (data['type'] == 'status_update') {
+              print("🔄 Status update received: ${data['order_id']} -> ${data['new_status']}");
+              if (_onStatusUpdate != null) {
+                _onStatusUpdate!(data);
+              }
+              
+              // Notify all listeners about the status update
+              _notifyStatusUpdate(data);
+            }
           } catch (e) {
-            print("⚠️ Error during WebSocket reconnection: $e");
+            print("❌ Error processing WebSocket message: $e");
           }
-      }
-    });
+        },
+        onError: (error) {
+          print("❌ WebSocket error: $error");
+          _scheduleReconnect();
+        },
+        onDone: () {
+          print("📴 WebSocket connection closed");
+          _scheduleReconnect();
+        },
+        cancelOnError: false,
+      );
+
+      // Start polling as a fallback
+      _startPolling();
+      
     } catch (e) {
-      print("⚠️ Error setting up reconnection timer: $e");
+      print("❌ Error initializing WebSocket: $e");
+      _scheduleReconnect();
     }
   }
 
-  void _startPolling(String userId, String shopId) {
-    try {
-      // Determine if using ngrok
-      final apiBaseUrl = dotenv.env['API_BASE_URL'] ?? '';
-      final isNgrok = apiBaseUrl.contains('ngrok-free.app');
-      
-      // Use shorter polling interval for ngrok (since WebSocket is disabled)
-      final pollingInterval = isNgrok ? 5 : 8; // 5 seconds for ngrok, 8 for others
-      
-      if (isNgrok) {
-        print("🔄 Starting polling with ${pollingInterval}s interval (WebSocket disabled for ngrok)");
-      } else {
-        print("🔄 Starting polling for order updates with ${pollingInterval}s interval");
-      }
-      
-      // Cancel existing polling timer
-    _pollingTimer?.cancel();
-      
-      // Start new polling timer
-      _pollingTimer = Timer.periodic(Duration(seconds: pollingInterval), (_) async {
+  Future<WebSocketChannel?> _connectWithRetry(Uri uri, {int maxRetries = 3}) async {
+    for (int i = 0; i < maxRetries; i++) {
       try {
-        print("🔄 Polling for new order updates...");
-        final orders = await fetchOrders(shopId);
-          
-          if (_onStatusUpdate != null && orders.isNotEmpty) {
-            // Track if we've found any status changes
-            bool foundStatusChanges = false;
-            
-            // Process all orders
-          for (var order in orders) {
-              final orderId = order['order_id'].toString();
-              final status = order['status'].toString();
-              
-              print("📨 Polling found order #$orderId with status: $status");
-              
-              // Notify about each order's status
-            _onStatusUpdate!({
-                'order_id': orderId,
-                'new_status': status, // Use the status directly from the backend
-              });
-              
-              foundStatusChanges = true;
-            }
-            
-            if (!foundStatusChanges) {
-              print("ℹ️ Polling found no status changes");
-            }
-          } else if (orders.isEmpty) {
-            print("ℹ️ Polling found no orders");
-        }
+        final ws = WebSocketChannel.connect(uri);
+        await ws.ready;
+        return ws;
       } catch (e) {
-        print("❌ Error polling orders: $e");
+        print("❌ Connection attempt ${i + 1} failed: $e");
+        if (i < maxRetries - 1) {
+          await Future.delayed(Duration(seconds: 2 * (i + 1))); // Exponential backoff
+        }
+      }
+    }
+    return null;
+  }
+
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+      if (_currentUserId != null && _currentShopId != null) {
+        print("🔄 Attempting to reconnect WebSocket...");
+        initializeWebSocket(_currentUserId!, _currentShopId!);
       }
     });
-    } catch (e) {
-      print("⚠️ Error starting polling timer: $e");
-    }
+  }
+
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (!isWebSocketConnected && _currentShopId != null) {
+        print("📡 Polling for order updates...");
+        try {
+          final orders = await fetchOrders(_currentShopId!);
+          if (_onStatusUpdate != null) {
+            for (var order in orders) {
+              _onStatusUpdate!({
+                'type': 'status_update',
+                'order_id': order['order_id'],
+                'new_status': order['status'],
+              });
+            }
+          }
+        } catch (e) {
+          print("❌ Error polling for updates: $e");
+        }
+      }
+    });
   }
 
   void disconnect() {
-    try {
-      _channel?.sink.close();
-      _channel = null;
-      _reconnectTimer?.cancel();
-      _reconnectTimer = null;
-      _currentUserId = null;
-      _currentShopId = null;
-      print("🔌 WebSocket disconnected and polling stopped");
-    } catch (e) {
-      print("❌ Error disconnecting: $e");
-    }
+    print("🔌 Disconnecting WebSocket");
+    _channel?.sink.close();
+    _channel = null;
+    _reconnectTimer?.cancel();
+    _pollingTimer?.cancel();
   }
 
   Future<Map<String, dynamic>?> fetchOrderById(String orderId) async {
@@ -660,7 +495,6 @@ class OrderService {
       
       final isSecure = dotenv.env['API_USE_HTTPS'] == 'true';
       final host = dotenv.env['API_HOST'] ?? '10.0.2.2:5000';
-      final baseUrl = dotenv.env['API_BASE_URL'];
       
       // Get auth headers with JWT token
       final headers = await auth.AuthService.getAuthHeaders();
@@ -1000,6 +834,26 @@ class OrderService {
     } catch (e) {
       print("❌ Error getting stored shop name: $e");
       return null;
+    }
+  }
+
+  // List of status update callbacks
+  final List<Function(Map<String, dynamic>)> _statusUpdateCallbacks = [];
+
+  // Add a new status update listener
+  void addStatusUpdateListener(Function(Map<String, dynamic>) callback) {
+    _statusUpdateCallbacks.add(callback);
+  }
+
+  // Remove a status update listener
+  void removeStatusUpdateListener(Function(Map<String, dynamic>) callback) {
+    _statusUpdateCallbacks.remove(callback);
+  }
+
+  // Notify all listeners about a status update
+  void _notifyStatusUpdate(Map<String, dynamic> data) {
+    for (var callback in _statusUpdateCallbacks) {
+      callback(data);
     }
   }
 }

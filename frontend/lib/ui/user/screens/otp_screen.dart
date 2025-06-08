@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:bitetimenew/ui/user/screens/login_screen.dart';
+import 'package:bitetimenew/ui/canteen/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,8 +16,13 @@ import '../../../services/auth/otp_auth.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
+  final bool isCanteenStaff;
 
-  const OtpScreen({super.key, required this.email});
+  const OtpScreen({
+    super.key, 
+    required this.email,
+    this.isCanteenStaff = false,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -82,7 +88,11 @@ class _OtpScreenState extends State<OtpScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => UserLoginScreen()),
+        MaterialPageRoute(
+          builder: (context) => widget.isCanteenStaff 
+            ? CanteenLoginScreen() 
+            : UserLoginScreen(),
+        ),
       );
     } else {
       ErrorDialog.show(

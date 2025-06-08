@@ -81,7 +81,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ErrorDialog.show(
         context,
         title: "Invalid Email",
-        message: "Use your college email ending with @shanmugha.edu.in.",
+        message: "Please use your college email (@shanmugha.edu.in). This app is for students and faculty only.",
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // Check if email is from canteen domain
+    if (email.toLowerCase().contains('canteen') || email.toLowerCase().contains('cafeteria')) {
+      ErrorDialog.show(
+        context,
+        title: "Invalid Email",
+        message: "This app is for students and faculty only. If you are canteen staff, please use the canteen app instead.",
       );
       setState(() {
         _isLoading = false;
